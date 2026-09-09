@@ -15,9 +15,9 @@ Status: IMPLEMENTATION COMPLETE — WAITING FOR HUMAN APPROVAL
 | **Phase 3** | **Backend Express Foundation** | **APPROVED** | 08 Sep 2026 |
 | **Phase 4** | **MongoDB Atlas & Database Foundation** | **APPROVED** | 08 Sep 2026 |
 | **Phase 5** | **Authentication & Role-Based Authorization** | **APPROVED** | 08 Sep 2026 |
-| **Phase 6** | **Inspector & Assistant Controller Dashboards** | **IMPLEMENTATION COMPLETE** | *Pending Review* |
-| Phase 7 | New Inspection Workflow & Package Context | NOT_STARTED | — |
-| Phase 8 | Multi-Sample Inspection Flow | NOT_STARTED | — |
+| **Phase 6** | **Inspector & Assistant Controller Dashboards** | **APPROVED** | 08 Sep 2026 |
+| **Phase 7** | **New Inspection Workflow & Package Context** | **APPROVED** | 09 Sep 2026 |
+| **Phase 8** | **Multi-Sample Inspection Flow** | **IMPLEMENTATION COMPLETE** | *Pending Review* |
 | Phase 9 | Camera Capture & Temporary Image Handling | NOT_STARTED | — |
 | Phase 10 | Gemini AI/OCR Integration | NOT_STARTED | — |
 | Phase 11 | Rule Database & Deterministic Rule Engine | NOT_STARTED | — |
@@ -56,7 +56,7 @@ Status: IMPLEMENTATION COMPLETE — WAITING FOR HUMAN APPROVAL
   * *Strictly removed "Products / Commodities" from the Inspector navigation as mandated.*
 * Implemented Inspector Dashboard with KPI summary cards, quick actions, non-compliance alerts, and recent inspections table.
 * Implemented Assistant Controller Dashboard with supervisory KPIs, field officer monitoring, and Recharts visual analytics placeholders (Inspection trends & Violation categories).
-* Implemented interactive New Inspection placeholder visualizing the 7-step wizard with Package Context selection (Retail, Wholesale, Institutional, Imported, Export, Single-Piece) and multi-sample scoping.
+* Implemented interactive New Inspection placeholder visualizing the 7-step wizard with Package Context selection (Retail, Wholesale, Institutional, Imported, Export) and multi-sample scoping.
 * Created modular reusable UI library: `Button`, `Card`, `DashboardCard`, `Badge`, `Table`, `EmptyState`, `PageHeader`.
 * Implemented top header with live backend health indicator (verifying Phase 1 connection) and demo role toggle switcher for Phase 2 UI verification.
 * Built placeholder screens for all navigation routes without adding premature database, AI, or business logic.
@@ -170,13 +170,133 @@ Status: IMPLEMENTATION COMPLETE — WAITING FOR HUMAN APPROVAL
 
 ---
 
-## 8. Important Architectural Decisions Recorded
+---
+
+## 8. Task A Accomplishments — Complete Removal of "Single-Piece Retail Package"
+
+* **Elimination of Non-Statutory Context**:
+  * Removed `SINGLE_PIECE_RETAIL_PACKAGE` enum value from `backend/src/models/Inspection.ts`.
+  * Removed `SINGLE_PIECE_RETAIL_PACKAGE` from rule `LMPC-R06-1-C` in `backend/src/database/seed.ts`.
+  * Removed `Single-Piece` references from `frontend/src/pages/controller/RuleDatabase.tsx` and `frontend/src/pages/inspector/RuleReference.tsx`.
+  * Removed `Single-Piece Retail` from mock row in `frontend/src/pages/inspector/MyInspections.tsx`.
+  * Removed `Single-Piece` option from `frontend/src/pages/inspector/NewInspectionPlaceholder.tsx`.
+* **Permanent Statutory 5-Context Standard**:
+  * The application now enforces strictly the 5 codified packaging contexts recognized under LMPC 2011:
+    1. `RETAIL_PACKAGE` (Rule 6(1))
+    2. `WHOLESALE_PACKAGE` (Rule 24)
+    3. `INDUSTRIAL_INSTITUTIONAL_PACKAGE` (Rule 3)
+    4. `IMPORTED_PACKAGE` (Rule 6(1)(g))
+    5. `EXPORT_PACKAGE` (Rule 34)
+* **Active Guardrail**:
+  * `InspectionController.createInspection` explicitly validates and rejects any payload providing `SINGLE_PIECE_RETAIL_PACKAGE` with HTTP 400 Bad Request and an informative statutory deprecation message.
+* **Verification**:
+  * Full repository grep confirms 0 active occurrences of `Single-Piece Retail Package` across the entire codebase.
+
+---
+
+## 9. Phase 7 Accomplishments — New Inspection Workflow & Package Context
+
+* **Backend Inspection Subsystem**:
+  * Implemented `InspectionService` (`backend/src/services/inspection.service.ts`):
+    * Sequential unique inspection number generation (`INS-YYYY-XXX`, e.g. `INS-2026-003`).
+    * Creation of root inspection document with initial status `READY_FOR_SAMPLING`.
+    * Enforced role-based data isolation on inspection queries: field inspectors are strictly scoped to their own records; supervisory Assistant Controllers view all records.
+    * Ownership authorization on single-inspection retrieval (`getInspectionById`): returns HTTP 403 Forbidden if an inspector attempts to access an inspection belonging to a different officer.
+  * Implemented `InspectionController` (`backend/src/controllers/inspection.controller.ts`):
+    * `POST /api/inspections`: Role guard (`INSPECTOR`), inputs validation (commodity, location, positive sample count >= 1, statutory 5 contexts).
+    * `GET /api/inspections`: Scoped listing with search filtering across commodity, location, brand, and inspection number.
+    * `GET /api/inspections/:id`: Data-isolated retrieval by MongoDB `_id` or `inspectionNumber`.
+  * Implemented `inspection.routes.ts` mounted under `/api/inspections`:
+    * Protected by `requireAuth` session middleware.
+    * `POST /api/inspections` restricted to `INSPECTOR` role (Assistant Controller receives HTTP 403).
+* **Frontend Inspection Subsystem**:
+  * Created `frontend/src/services/inspectionService.ts`:
+    * Type definitions for `PackageContext`, `InspectionStatus`, `InspectionData`, and `CreateInspectionPayload`.
+    * `PACKAGE_CONTEXT_DEFINITIONS` metadata dictionary with statutory references and legal descriptions.
+    * API client functions: `createInspection`, `fetchMyInspections`, `fetchInspectionById`.
+  * Created `frontend/src/pages/inspector/NewInspectionPage.tsx`:
+    * 3-step structured wizard:
+      * **Step 1: Details & Premises** (Commodity, Brand, Location, Market, Remarks with real-time validation).
+      * **Step 2: Statutory Package Context & Sample Scope** (Strict 5-context selector with statutory citations and multi-sample scope selector).
+      * **Step 3: Review & Initiate** (Comprehensive metadata review card, statutory readiness banner, loading submission state).
+    * Seamless navigation to Inspection Workspace upon creation.
+  * Created `frontend/src/pages/inspector/InspectionWorkspace.tsx`:
+    * Dedicated workspace mounted at `/inspector/inspections/:id`.
+    * Live database retrieval by ID with loading spinner and error handling.
+    * Inspection case metadata display (Number, Status, Commodity, Brand, Location, Sample Scope, Officer Badge).
+    * Statutory context guidance card highlighting governing LMPC provisions.
+    * Phase 8 Roadmap Banner informing user that child sample collection and camera capture will be enabled in Phase 8.
+  * Updated `frontend/src/pages/inspector/MyInspections.tsx`:
+    * Removed hardcoded placeholder data.
+    * Integrated live API call via `fetchMyInspections()`.
+    * Added search filter, loading indicator, and actionable `<EmptyState />` linking directly to New Inspection.
+    * Table action navigating to `/inspector/inspections/:id`.
+  * Updated `frontend/src/App.tsx`:
+    * Replaced placeholder wizard with `NewInspectionPage`.
+    * Mounted `/inspector/inspections/:id` routing to `InspectionWorkspace`.
+* **Testing & Verification**:
+  * **Unit & Controller Logic Suite (`scratch/unit_test_phase7.ts`)**:
+    * 8/8 tests passed 100%: Unauthenticated rejection (401), Controller creation block (403), `SINGLE_PIECE_RETAIL_PACKAGE` rejection (400), Commodity validation (400), Location validation (400), Invalid sample count validation (400), Invalid context validation (400), Cross-inspector data isolation (403).
+  * **Build Verification**:
+    * Backend TypeScript: `npm --prefix backend run build` exited with code 0.
+    * Frontend Vite: `npm --prefix frontend run build` exited with code 0 (2,223 modules transformed).
+
+---
+
+## 10. Phase 8 Accomplishments — Multi-Sample Inspection Management
+
+* **1:N Parent-Child Relationship Established**:
+  * Connected child `Sample` records directly to parent `Inspection` documents via `inspectionId` ObjectId reference.
+  * Verified that an inspection with planned scope `samplesCount: 5` contains exactly 5 child sample records in MongoDB Atlas, with zero separate inspection records created.
+* **Automated Sequential Numbering & Unique Codes**:
+  * Implemented automated assignment of `sampleNumber` (`1, 2, ... N`) and formatted `sampleCode` (`INS-YYYY-XXX-S0N`, e.g. `INS-2026-003-S01`).
+  * Enforced database-level duplicate prevention via compound unique indexes: `{ inspectionId: 1, sampleNumber: 1 }` and `{ inspectionId: 1, sampleCode: 1 }`.
+* **Technical Lifecycle Only**:
+  * Implemented technical state machine: `PENDING`, `IN_PROGRESS`, `READY_FOR_ANALYSIS`.
+  * Active Guardrail: Explicitly rejects any premature legal compliance status (`COMPLIANT`, `NON_COMPLIANT`, `LEGAL_VIOLATION`) with HTTP 400 Bad Request.
+* **Backend Subsystem**:
+  * Implemented `SampleService` (`backend/src/services/sample.service.ts`):
+    * `createSample`: Sequential numbering, sample limit enforcement (`samples.length < inspection.samplesCount`), duplicate prevention.
+    * `listSamplesForInspection`: Scoped by user role; calculates live progress telemetry (`totalExpected`, `totalCreated`, `completed`, `inProgress`, `pending`, `remaining`, `percentComplete`).
+    * `getSampleById`: Resolves sample by ID or sampleCode with strict ownership validation.
+    * `updateSample`: Modifies notes and technical status with guardrails against legal compliance statuses.
+  * Implemented `SampleController` (`backend/src/controllers/sample.controller.ts`) with HTTP handlers and validation.
+  * Implemented `sample.routes.ts` mounted under `/api/inspections/:inspectionId/samples` in `inspection.routes.ts`.
+* **Frontend Subsystem**:
+  * Implemented `sampleService.ts` (`frontend/src/services/sampleService.ts`) with typed client functions.
+  * Enhanced `InspectionWorkspace.tsx` (`frontend/src/pages/inspector/InspectionWorkspace.tsx`):
+    * Dynamic animated progress bar and counters (`X / Y completed`, `Z remaining`).
+    * "Add Sample" action button allocating the next sequential unit automatically.
+    * Milestone banner when all planned units are registered (`All planned samples added`).
+    * Interactive sample roster table with unit numbering, status badges, notes snippet, and "Open Unit" button.
+    * Empty state for cases with 0 samples.
+  * Created `SampleWorkspace.tsx` (`frontend/src/pages/inspector/SampleWorkspace.tsx`):
+    * Dedicated individual specimen examination view mounted at `/inspector/inspections/:inspectionId/samples/:sampleId`.
+    * Previous / Next sample navigation buttons (`< Sample 01`, `Sample 03 >`).
+    * Parent inspection summary strip.
+    * Editable technical status selector (`PENDING`, `IN_PROGRESS`, `READY_FOR_ANALYSIS`).
+    * Editable officer field notes with persistence and save confirmation.
+    * Visible disabled placeholders for Phase 9 (Camera Capture), Phase 10 (Gemini OCR), and Phase 11 (Rule Engine).
+  * Registered route in `frontend/src/App.tsx`.
+* **Testing & Verification**:
+  * **Phase 8 Automated Test Suite (`scratch/test_phase8_samples.ts`)**: 10/10 tests passed 100%.
+  * **Phase 7 Regression Suite (`scratch/unit_test_phase7.ts`)**: 8/8 tests passed 100%.
+  * **Build Verification**: Backend `tsc` passed with 0 errors; Frontend `vite build` passed with 0 errors (2,225 modules transformed).
+
+---
+
+## 11. Important Architectural Decisions Recorded
 
 * **Prohibited Technologies Preserved**: Confirmed zero references or usage of Railway and Cloudinary.
 * **Base44 Independence**: Confirmed zero Base44 APIs, database, or runtime dependencies.
+* **Strict Phase Boundaries**:
+  * Zero Camera Capture / Image Upload Logic (Reserved for Phase 9).
+  * Zero Gemini Multimodal Vision / OCR Integrations (Reserved for Phase 10).
+  * Zero Rule Engine Compliance Evaluations (Reserved for Phase 11).
+  * Zero Compliance Findings or Status Mutations (`COMPLIANT`/`NON_COMPLIANT` belong to Phase 12).
+  * Zero PDF Document Generation (Reserved for Phase 14).
 * **Backend-Enforced Data Isolation**: Inspector data isolation is strictly enforced at the database query level (`{ inspectorId: req.user.inspectorId }`), never by client-side filtering.
-* **Zero Fake Statistics**: Dashboards calculate all metrics directly from actual MongoDB Atlas documents. Empty states are explicitly rendered when no records exist.
 * **Dual Role Model Preserved**: Clear separation between `INSPECTOR` (field execution) and `ASSISTANT_CONTROLLER` (supervisory oversight).
-* **Workload Telemetry**: Assistant Controller aggregates inspector workload dynamically via Mongoose array filtering and groupings without modifying base domain models.
 * **1:N Inspection-to-Sample Hierarchy**: Preserved from Phase 4 foundation for future inspection workflows.
+
 

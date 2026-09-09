@@ -28,7 +28,7 @@ export const RuleReference: React.FC = () => {
       ref: 'Rule 6(1)(d)',
       title: 'Net Quantity in Standard Units of Weight or Measure',
       desc: 'The net quantity, in terms of the standard unit of weight or measure, of the commodity contained in the package shall be declared. Numeral font height must comply with prescribed minimums in Table 1.',
-      applicability: 'All Packages (except pure numbers/single pieces)',
+      applicability: 'All Packages',
       status: 'Active',
       source: 'LMPC Rules 2011, First Schedule Table 1',
     },

@@ -22,7 +22,7 @@ export const RuleDatabase: React.FC = () => {
       id: 'RUL-001',
       ruleRef: 'Rule 6(1)(a)',
       declaration: 'Common / Generic Commodity Name',
-      applicability: 'Retail & Single-Piece Packages',
+      applicability: 'Retail Packages',
       version: 'v1.2',
       effectiveFrom: '01 Nov 2011',
       status: 'active',

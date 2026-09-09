@@ -50,11 +50,6 @@ export const NewInspectionPlaceholder: React.FC = () => {
       desc: 'Packages packed exclusively for export beyond the territories of India.',
       code: 'EXPORT',
     },
-    {
-      name: 'Single-Piece Retail Package',
-      desc: 'Individual packaged piece sold by number rather than weight or measure.',
-      code: 'SINGLE_PIECE',
-    },
   ];
 
   const workflowSteps = [

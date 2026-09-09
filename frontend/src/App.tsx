@@ -7,7 +7,9 @@ import { LoginPage } from './pages/auth/LoginPage';
 
 // Inspector Pages
 import { InspectorDashboard } from './pages/inspector/InspectorDashboard';
-import { NewInspectionPlaceholder } from './pages/inspector/NewInspectionPlaceholder';
+import { NewInspectionPage } from './pages/inspector/NewInspectionPage';
+import { InspectionWorkspace } from './pages/inspector/InspectionWorkspace';
+import { SampleWorkspace } from './pages/inspector/SampleWorkspace';
 import { ScanCapturePackage } from './pages/inspector/ScanCapturePackage';
 import { MyInspections } from './pages/inspector/MyInspections';
 import { InspectionHistory } from './pages/inspector/InspectionHistory';
@@ -62,7 +64,12 @@ export const App: React.FC = () => {
                 <Route path="/inspector">
                   <Route index element={<Navigate to="/inspector/dashboard" replace />} />
                   <Route path="dashboard" element={<InspectorDashboard />} />
-                  <Route path="new-inspection" element={<NewInspectionPlaceholder />} />
+                  <Route path="new-inspection" element={<NewInspectionPage />} />
+                  <Route path="inspections/:id" element={<InspectionWorkspace />} />
+                  <Route
+                    path="inspections/:inspectionId/samples/:sampleId"
+                    element={<SampleWorkspace />}
+                  />
                   <Route path="scan-capture" element={<ScanCapturePackage />} />
                   <Route path="my-inspections" element={<MyInspections />} />
                   <Route path="history" element={<InspectionHistory />} />

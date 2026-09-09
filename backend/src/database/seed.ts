@@ -130,6 +130,7 @@ async function runSeed(): Promise<void> {
         const sampleData = {
           inspectionId: inspection._id,
           sampleNumber: i,
+          sampleCode: `${inspection.inspectionNumber}-S${String(i).padStart(2, '0')}`,
           status: inspData.status === InspectionStatus.COMPLETED ? SampleStatus.VERIFIED : SampleStatus.PENDING,
           notes: `Sample #${i}: Package seal intact, principal display panel examined for ${inspData.commodity}`,
         };
@@ -177,7 +178,7 @@ async function runSeed(): Promise<void> {
         ruleReference: 'Rule 6(1)(c)',
         declarationType: 'NET_QUANTITY',
         requirementDescription: 'Net quantity in terms of standard unit of weight, measure or number.',
-        packageContext: ['RETAIL_PACKAGE', 'WHOLESALE_PACKAGE', 'SINGLE_PIECE_RETAIL_PACKAGE'],
+        packageContext: ['RETAIL_PACKAGE', 'WHOLESALE_PACKAGE'],
         mandatoryStatus: true,
         sourceDocument: 'Legal Metrology (Packaged Commodities) Rules, 2011',
         sourceSection: 'Rule 6(1)(c)',
