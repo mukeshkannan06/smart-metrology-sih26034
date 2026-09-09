@@ -407,13 +407,11 @@ export const SampleWorkspace: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   Technical Sampling Lifecycle Status *
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   {[
                     {
                       val: SampleStatus.PENDING,
                       label: 'Pending',
-                      desc: 'Awaiting visual capture in Phase 9',
                       desc: 'Awaiting visual capture',
                     },
                     {
@@ -424,7 +422,6 @@ export const SampleWorkspace: React.FC = () => {
                     {
                       val: SampleStatus.IN_PROGRESS,
                       label: 'In Progress',
-                      desc: 'Examination in progress',
                       desc: 'Active examination',
                     },
                     {
@@ -514,14 +511,11 @@ export const SampleWorkspace: React.FC = () => {
           </Card>
         </div>
 
-        {/* Right 1 Col: Future Phase Placeholders */}
         {/* Right 1 Col: Phase 9 Package Visual Evidence & Future Phase Placeholders */}
         <div className="space-y-6">
           {/* Phase 9 Package Visual Evidence Gallery */}
           <Card className="border-slate-200 shadow-xs">
             <CardHeader
-              title="Future Analysis Pipeline"
-              subtitle="Planned capabilities for this sample"
               title="Package Visual Evidence"
               subtitle={`Physical photographs for specimen #${currentSample?.sampleNumber}`}
               action={
@@ -537,21 +531,11 @@ export const SampleWorkspace: React.FC = () => {
               }
             />
             <CardContent className="space-y-4 text-xs">
-              {/* Phase 9 Camera Placeholder */}
-              <div className="p-3.5 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 space-y-2">
-                <div className="flex items-center space-x-2 text-slate-500 font-bold">
-                  <Camera className="w-4 h-4 text-slate-400" />
-                  <span>Phase 9: Package Image Capture</span>
               {imageActionSuccess && (
                 <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center space-x-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                   <span>{imageActionSuccess}</span>
                 </div>
-                <p className="text-[11px] text-slate-500 leading-relaxed">
-                  High-resolution photo capture of the Principal Display Panel (PDP) and mandatory declarations panel.
-                </p>
-                <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-600">
-                  Disabled in Phase 8
               )}
 
               {imageActionError && (
@@ -669,13 +653,6 @@ export const SampleWorkspace: React.FC = () => {
                   </Button>
                 </div>
               )}
-
-              <div className="p-2.5 bg-slate-100 rounded-lg text-[10px] text-slate-600 flex items-start space-x-2">
-                <Info className="w-3.5 h-3.5 text-slate-500 mt-0.5 flex-shrink-0" />
-                <span>
-                  <strong>Phase 9 Temporary Evidence:</strong> Photos are secured and ready for Phase 10 Gemini OCR text extraction. No legal determinations are made in this step.
-                </span>
-              </div>
             </CardContent>
           </Card>
 
@@ -687,7 +664,6 @@ export const SampleWorkspace: React.FC = () => {
             />
             <CardContent className="space-y-3 text-xs">
               {/* Phase 10 OCR Placeholder */}
-              <div className="p-3.5 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 space-y-2">
               <div className="p-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 space-y-1.5">
                 <div className="flex items-center space-x-2 text-slate-500 font-bold">
                   <FileSearch className="w-4 h-4 text-slate-400" />
@@ -697,13 +673,11 @@ export const SampleWorkspace: React.FC = () => {
                   Automated multimodal text extraction of MRP, Net Quantity, Best Before, and Consumer Care details.
                 </p>
                 <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-600">
-                  Disabled in Phase 8
                   Disabled in Phase 9
                 </span>
               </div>
 
               {/* Phase 11 Rule Engine Placeholder */}
-              <div className="p-3.5 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 space-y-2">
               <div className="p-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 space-y-1.5">
                 <div className="flex items-center space-x-2 text-slate-500 font-bold">
                   <Sparkles className="w-4 h-4 text-slate-400" />
@@ -713,7 +687,6 @@ export const SampleWorkspace: React.FC = () => {
                   Deterministic evaluation against Legal Metrology Rules 2011 to generate candidate compliance findings.
                 </p>
                 <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-600">
-                  Disabled in Phase 8
                   Disabled in Phase 9
                 </span>
               </div>
@@ -722,8 +695,6 @@ export const SampleWorkspace: React.FC = () => {
         </div>
       </div>
 
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-[11px] text-blue-900 flex items-start space-x-2">
-                <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
       {/* Phase 9 Camera Capture Modal */}
       {currentSample && (
         <CameraCaptureModal
@@ -756,7 +727,6 @@ export const SampleWorkspace: React.FC = () => {
                   #{selectedImageForView.sequence}
                 </span>
                 <div>
-                  <span className="font-bold">Phase 8 Objective:</span> Multi-sample state tracking is active. Physical evidence and AI extraction will attach to this unit in future phases.
                   <h3 className="text-sm font-bold text-slate-100">
                     {selectedImageForView.fileName || `Specimen #${currentSample.sampleNumber} Photo`}
                   </h3>
@@ -765,8 +735,6 @@ export const SampleWorkspace: React.FC = () => {
                   </p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
               <button
                 onClick={() => setSelectedImageForView(null)}
                 aria-label="Close image viewer"
@@ -800,9 +768,7 @@ export const SampleWorkspace: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
       )}
     </div>
   );
 };
-

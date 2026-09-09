@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-import { Inspection, IInspection, Sample, ISample, SampleStatus, UserRole } from '../models';
 import { Inspection, IInspection, Sample, ISample, ISampleImage, SampleStatus, UserRole } from '../models';
 import {
   parseImagePayload,

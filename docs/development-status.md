@@ -1,7 +1,7 @@
 # Smart Metrology — Development Status Log
 
 Project: Smart Metrology (SIH26034)  
-Current Phase: Phase 6 — Inspector & Assistant Controller Dashboards  
+Current Phase: Phase 9 — Camera Capture & Temporary Package Image Handling  
 Status: IMPLEMENTATION COMPLETE — WAITING FOR HUMAN APPROVAL  
 
 ---
@@ -17,8 +17,8 @@ Status: IMPLEMENTATION COMPLETE — WAITING FOR HUMAN APPROVAL
 | **Phase 5** | **Authentication & Role-Based Authorization** | **APPROVED** | 08 Sep 2026 |
 | **Phase 6** | **Inspector & Assistant Controller Dashboards** | **APPROVED** | 08 Sep 2026 |
 | **Phase 7** | **New Inspection Workflow & Package Context** | **APPROVED** | 09 Sep 2026 |
-| **Phase 8** | **Multi-Sample Inspection Flow** | **IMPLEMENTATION COMPLETE** | *Pending Review* |
-| Phase 9 | Camera Capture & Temporary Image Handling | NOT_STARTED | — |
+| **Phase 8** | **Multi-Sample Inspection Flow** | **APPROVED** | 09 Sep 2026 |
+| **Phase 9** | **Camera Capture & Temporary Image Handling** | **IMPLEMENTATION COMPLETE** | *Pending Review* |
 | Phase 10 | Gemini AI/OCR Integration | NOT_STARTED | — |
 | Phase 11 | Rule Database & Deterministic Rule Engine | NOT_STARTED | — |
 | Phase 12 | Compliance Findings & Inspector Verification | NOT_STARTED | — |
@@ -285,12 +285,57 @@ Status: IMPLEMENTATION COMPLETE — WAITING FOR HUMAN APPROVAL
 
 ---
 
-## 11. Important Architectural Decisions Recorded
+## 11. Phase 9 Accomplishments
 
-* **Prohibited Technologies Preserved**: Confirmed zero references or usage of Railway and Cloudinary.
+* **Data Model & Temporary Storage Architecture**:
+  * Extended `ISample` with embedded `images: ISampleImage[]` (`backend/src/models/Sample.ts`).
+  * Designed `ISampleImage` storing `imageId`, `sequence`, `mimeType`, `sizeBytes`, `width`, `height`, `fileName`, `temporaryReference`, and `capturedAt`.
+  * Implemented zero-cloud temporary filesystem persistence utility (`backend/src/utils/tempStorage.ts`) in `backend/tmp/uploads/`.
+  * Added binary magic bytes verification (`FF D8 FF` for JPEG, `89 50 4E 47` for PNG, `52 49 46 46...57 45 42 50` for WEBP) to prevent forged or corrupt uploads.
+  * Increased Express payload limits to 10MB in `backend/src/app.ts` to support high-resolution photo transfers.
+* **Backend Business Logic & API Layer**:
+  * Implemented `SampleService.attachImageToSample`:
+    * Strict Inspector ownership enforcement (returns HTTP 403 for other inspectors or Assistant Controller).
+    * Validates MIME type, max 5MB size limit, and 5 images maximum per sample.
+    * Automatically advances sample technical status from `PENDING` to `CAPTURED`.
+  * Implemented `SampleService.getSampleImages`:
+    * Returns attached image metadata records for authorized Inspector or Assistant Controller.
+  * Implemented `SampleService.getSampleImageFile`:
+    * Resolves file on disk and returns binary stream with private non-cachable headers (`Cache-Control: private, no-store`).
+    * Gated by inspection access rights (no public URLs).
+  * Implemented `SampleService.removeImageFromSample`:
+    * Verifies Inspector ownership, purges physical file from disk, pulls metadata record, and re-sequences remaining photos.
+    * Reverts sample status to `PENDING` if all evidence photos are removed.
+  * Registered routes in `backend/src/routes/sample.routes.ts` mounted under `/api/inspections/:inspectionId/samples/:sampleId/images`.
+* **Frontend Components & UI**:
+  * Created `CameraCaptureModal.tsx` (`frontend/src/components/camera/CameraCaptureModal.tsx`):
+    * Mobile-first camera interface with HTML5 `getUserMedia({ video: { facingMode: { ideal: 'environment' } } })`.
+    * Permission requested strictly on-demand (only when modal opens).
+    * Camera toggle (front/back), viewfinder framing guide ("Keep PDP inside frame • Ensure text is clear • Avoid glare").
+    * Instant preview freeze with Retake and Confirm actions.
+    * Desktop file chooser fallback with drag-and-drop support.
+    * Client-side validation for JPEG/PNG/WEBP and 5MB size limit.
+    * Media tracks immediately stopped on unmount or close to release hardware.
+  * Updated `SampleWorkspace.tsx` (`frontend/src/pages/inspector/SampleWorkspace.tsx`):
+    * Replaced disabled Phase 9 placeholder with live **Package Visual Evidence** gallery.
+    * Responsive photo cards showing sequence badge (`#1`, `#2`), thumbnail, file size, and capture date.
+    * Full-size lightbox image preview modal with metadata header.
+    * Delete photo action with confirmation dialog.
+    * Technical lifecycle status selector updated to include `CAPTURED`.
+    * Clear statutory notices: visual evidence collection only; zero compliance claims.
+* **Automated & Regression Testing**:
+  * **Phase 9 Test Suite (`scratch/test_phase9_images.ts`)**: 24/24 tests passed 100%.
+  * **Phase 8 Regression Suite (`scratch/test_phase8_samples.ts`)**: 10/10 tests passed 100%.
+  * **Phase 7 Regression Suite (`scratch/unit_test_phase7.ts`)**: 8/8 tests passed 100%.
+  * **Build Verification**: Backend `tsc` passed with 0 errors; Frontend `vite build` passed with 0 errors.
+
+---
+
+## 12. Important Architectural Decisions Recorded
+
+* **Prohibited Technologies Preserved**: Confirmed zero references or usage of Railway, Cloudinary, AWS S3, Google Cloud Storage, or Firebase Storage.
 * **Base44 Independence**: Confirmed zero Base44 APIs, database, or runtime dependencies.
 * **Strict Phase Boundaries**:
-  * Zero Camera Capture / Image Upload Logic (Reserved for Phase 9).
   * Zero Gemini Multimodal Vision / OCR Integrations (Reserved for Phase 10).
   * Zero Rule Engine Compliance Evaluations (Reserved for Phase 11).
   * Zero Compliance Findings or Status Mutations (`COMPLIANT`/`NON_COMPLIANT` belong to Phase 12).
@@ -298,5 +343,6 @@ Status: IMPLEMENTATION COMPLETE — WAITING FOR HUMAN APPROVAL
 * **Backend-Enforced Data Isolation**: Inspector data isolation is strictly enforced at the database query level (`{ inspectorId: req.user.inspectorId }`), never by client-side filtering.
 * **Dual Role Model Preserved**: Clear separation between `INSPECTOR` (field execution) and `ASSISTANT_CONTROLLER` (supervisory oversight).
 * **1:N Inspection-to-Sample Hierarchy**: Preserved from Phase 4 foundation for future inspection workflows.
+
 
 

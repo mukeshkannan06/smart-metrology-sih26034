@@ -62,7 +62,6 @@ export const SAMPLE_STATUS_META: Record<
   [SampleStatus.PENDING]: {
     label: 'Pending',
     badgeVariant: 'neutral',
-    description: 'Sample unit registered; awaiting physical examination and capture in Phase 9.',
     description: 'Sample unit registered; awaiting physical examination and capture.',
   },
   [SampleStatus.CAPTURED]: {
