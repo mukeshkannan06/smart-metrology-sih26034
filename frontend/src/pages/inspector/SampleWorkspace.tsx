@@ -23,6 +23,9 @@ import {
   Eye,
   X,
   Upload,
+  Check,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card, CardHeader, CardContent } from '../../components/ui/Card';
@@ -44,6 +47,15 @@ import {
   PACKAGE_CONTEXT_DEFINITIONS,
   fetchInspectionById,
 } from '../../services/inspectionService';
+import {
+  AIExtractionData,
+  DeclarationCategory,
+  CATEGORY_META,
+  analyzeSampleDeclarations,
+  getSampleExtractions,
+  reviewDeclaration,
+  ReviewStatus,
+} from '../../services/aiService';
 import { CameraCaptureModal } from '../../components/camera/CameraCaptureModal';
 
 export const SampleWorkspace: React.FC = () => {
@@ -69,6 +81,14 @@ export const SampleWorkspace: React.FC = () => {
   const [isDeletingImage, setIsDeletingImage] = useState<string | null>(null);
   const [imageActionError, setImageActionError] = useState<string | null>(null);
   const [imageActionSuccess, setImageActionSuccess] = useState<string | null>(null);
+
+  // Phase 10 AI Declaration Extraction state
+  const [aiExtraction, setAiExtraction] = useState<AIExtractionData | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisSuccess, setAnalysisSuccess] = useState<string | null>(null);
+  const [isExtractionStale, setIsExtractionStale] = useState<boolean>(false);
+  const [reviewingCategory, setReviewingCategory] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -109,6 +129,17 @@ export const SampleWorkspace: React.FC = () => {
           setCurrentSample(found);
           setStatus(found.status);
           setNotes(found.notes || '');
+
+          // Load AI declaration extractions for this sample
+          try {
+            const extResp = await getSampleExtractions(inspData._id, found._id);
+            if (isMounted && extResp) {
+              setAiExtraction(extResp.latestExtraction);
+              setIsExtractionStale(extResp.isStale);
+            }
+          } catch {
+            // Non-critical background extraction load
+          }
         }
       } catch (err: unknown) {
         if (isMounted) {
@@ -163,6 +194,9 @@ export const SampleWorkspace: React.FC = () => {
       setCurrentSample(res.sample);
       setStatus(res.sample.status);
       setAllSamples((prev) => prev.map((s) => (s._id === res.sample._id ? res.sample : s)));
+      if (aiExtraction) {
+        setIsExtractionStale(true);
+      }
       setImageActionSuccess('Package evidence photo attached successfully.');
       setTimeout(() => setImageActionSuccess(null), 4000);
     } catch (err: unknown) {
@@ -183,6 +217,9 @@ export const SampleWorkspace: React.FC = () => {
       setCurrentSample(res.sample);
       setStatus(res.sample.status);
       setAllSamples((prev) => prev.map((s) => (s._id === res.sample._id ? res.sample : s)));
+      if (aiExtraction) {
+        setIsExtractionStale(true);
+      }
       if (selectedImageForView?.imageId === imageId) {
         setSelectedImageForView(null);
       }
@@ -192,6 +229,55 @@ export const SampleWorkspace: React.FC = () => {
       setImageActionError(err instanceof Error ? err.message : 'Failed to delete image.');
     } finally {
       setIsDeletingImage(null);
+    }
+  };
+
+  const handleRunAnalysis = async (forceReanalyze = false) => {
+    if (!inspection || !currentSample) return;
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    setAnalysisSuccess(null);
+
+    try {
+      const res = await analyzeSampleDeclarations(inspection._id, currentSample._id, {
+        forceReanalyze,
+      });
+
+      setAiExtraction(res.extraction);
+      setCurrentSample(res.sample);
+      setStatus(res.sample.status);
+      setAllSamples((prev) => prev.map((s) => (s._id === res.sample._id ? res.sample : s)));
+      setIsExtractionStale(false);
+
+      if (res.cached) {
+        setAnalysisSuccess('Loaded existing package declaration extraction (unchanged images).');
+      } else {
+        setAnalysisSuccess('Package declarations extracted successfully via Gemini Multimodal AI.');
+      }
+      setTimeout(() => setAnalysisSuccess(null), 5000);
+    } catch (err: unknown) {
+      setAnalysisError(err instanceof Error ? err.message : 'AI declaration extraction failed.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleReview = async (category: DeclarationCategory, newStatus: ReviewStatus) => {
+    if (!inspection || !currentSample || !aiExtraction) return;
+    setReviewingCategory(category);
+    try {
+      const updatedExtraction = await reviewDeclaration(
+        inspection._id,
+        currentSample._id,
+        aiExtraction.extractionId,
+        category,
+        newStatus
+      );
+      setAiExtraction(updatedExtraction);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to record declaration review.');
+    } finally {
+      setReviewingCategory(null);
     }
   };
 
@@ -509,6 +595,342 @@ export const SampleWorkspace: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Phase 10: AI Package Declaration Extraction Card */}
+          <Card className="border-slate-200 shadow-xs">
+            <CardHeader
+              title="AI Package Declaration Extraction"
+              subtitle={`Multimodal visual reading of statutory declarations for Specimen #${currentSample?.sampleNumber}`}
+              action={
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={
+                    isAnalyzing ||
+                    !currentSample?.images ||
+                    currentSample.images.length === 0
+                  }
+                  onClick={() => handleRunAnalysis(Boolean(aiExtraction))}
+                  icon={
+                    isAnalyzing ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : aiExtraction ? (
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5" />
+                    )
+                  }
+                >
+                  {isAnalyzing
+                    ? 'Analyzing Package...'
+                    : aiExtraction
+                    ? 'Re-analyze Package'
+                    : 'Extract Declarations (Gemini AI)'}
+                </Button>
+              }
+            />
+            <CardContent className="space-y-4 text-xs">
+              {/* Statutory Non-Compliance Disclaimer Banner */}
+              <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-blue-950 flex items-start space-x-2.5">
+                <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div className="text-[11px] leading-relaxed">
+                  <span className="font-bold text-blue-900">Statutory Metrology Notice:</span>{' '}
+                  This AI module performs <em>visual observation & transcription only</em>. It strictly reports visible printed text.
+                  Statutory compliance evaluations (Rule 6, Rule 9, Rule 24) are evaluated in <strong>Phase 11 (Deterministic Rule Engine)</strong> and verified by the official in <strong>Phase 12</strong>.
+                </div>
+              </div>
+
+              {/* Stale Warning Banner */}
+              {isExtractionStale && aiExtraction && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 flex items-center justify-between">
+                  <div className="flex items-center space-x-2 text-[11px]">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                    <span>
+                      <strong>Image Set Changed:</strong> Package photos were added or modified since this analysis.
+                      Re-analyzing is recommended to sync declarations with current evidence.
+                    </span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRunAnalysis(true)}
+                    disabled={isAnalyzing}
+                    className="bg-white ml-2 flex-shrink-0"
+                  >
+                    Re-analyze
+                  </Button>
+                </div>
+              )}
+
+              {/* Analysis Feedback Alerts */}
+              {analysisSuccess && (
+                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center space-x-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <span>{analysisSuccess}</span>
+                </div>
+              )}
+
+              {analysisError && (
+                <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                  <span>{analysisError}</span>
+                </div>
+              )}
+
+              {/* AI Warnings / Quality Notices */}
+              {aiExtraction?.warnings && aiExtraction.warnings.length > 0 && (
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 space-y-1">
+                  <div className="flex items-center space-x-1.5 font-bold text-[11px] text-slate-800">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                    <span>AI Vision Quality Notices:</span>
+                  </div>
+                  <ul className="list-disc list-inside text-[11px] text-slate-600 pl-1 space-y-0.5">
+                    {aiExtraction.warnings.map((w, idx) => (
+                      <li key={idx}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Content: Either empty prompt or extraction results */}
+              {!aiExtraction ? (
+                <div className="p-8 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 text-center space-y-3">
+                  <div className="w-12 h-12 mx-auto rounded-full bg-blue-100/60 text-blue-700 flex items-center justify-center">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-xs">No AI Declarations Extracted Yet</h4>
+                    <p className="text-[11px] text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
+                      {!currentSample?.images || currentSample.images.length === 0
+                        ? 'Capture at least one package photo in the gallery on the right to unlock AI declaration extraction.'
+                        : 'Package photos are ready. Click below to inspect all 10 statutory declarations using Gemini Multimodal AI.'}
+                    </p>
+                  </div>
+                  {currentSample?.images && currentSample.images.length > 0 && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => handleRunAnalysis(false)}
+                      disabled={isAnalyzing}
+                      icon={isAnalyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    >
+                      {isAnalyzing ? 'Extracting Declarations...' : 'Extract Declarations (Gemini AI)'}
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Extraction Telemetry Summary Header */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px]">
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">AI Provider / Model</span>
+                      <span className="font-semibold text-slate-800 truncate block">
+                        {aiExtraction.provider} ({aiExtraction.aiModel})
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">Overall Confidence</span>
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded font-bold text-[10px] ${
+                        aiExtraction.overallConfidence === 'HIGH'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : aiExtraction.overallConfidence === 'MEDIUM'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-orange-100 text-orange-800'
+                      }`}>
+                        {aiExtraction.overallConfidence}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">Photos Analyzed</span>
+                      <span className="font-semibold text-slate-800">
+                        {aiExtraction.processingMetadata.imagesCount} Photos
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">Inspector Verified</span>
+                      <span className="font-semibold text-slate-800">
+                        {aiExtraction.declarations.filter((d) => d.inspectorReview?.status === 'CONFIRMED').length} / {aiExtraction.declarations.length}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Declarations List / Table */}
+                  <div className="space-y-2">
+                    {aiExtraction.declarations.map((decl) => {
+                      const meta = CATEGORY_META[decl.category] || { label: decl.category, statutoryHint: '', ruleRefHint: '' };
+                      const isConfirmed = decl.inspectorReview?.status === 'CONFIRMED';
+                      const isIncorrect = decl.inspectorReview?.status === 'INCORRECT';
+                      const isUnclear = decl.inspectorReview?.status === 'UNCLEAR';
+                      const isReviewing = reviewingCategory === decl.category;
+
+                      return (
+                        <div
+                          key={decl.category}
+                          className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-colors space-y-2"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            {/* Category Title & Legal Ref */}
+                            <div className="flex items-center space-x-2">
+                              <span className="font-bold text-slate-800 text-xs">{meta.label}</span>
+                              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-mono font-medium">
+                                {meta.ruleRefHint}
+                              </span>
+                            </div>
+
+                            {/* Badges: State + Confidence */}
+                            <div className="flex items-center space-x-2 flex-wrap">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                decl.state === 'DETECTED'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : decl.state === 'NOT_DETECTED'
+                                  ? 'bg-slate-100 text-slate-600'
+                                  : decl.state === 'LOW_CONFIDENCE'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-orange-100 text-orange-800'
+                              }`}>
+                                {decl.state.replace('_', ' ')}
+                              </span>
+
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                decl.confidence === 'HIGH'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : decl.confidence === 'MEDIUM'
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  : 'bg-orange-50 text-orange-700 border border-orange-200'
+                              }`}>
+                                {decl.confidence} Conf.
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Values & Evidence Location */}
+                          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-1">
+                            {/* Extracted Raw & Normalized Text */}
+                            <div className="md:col-span-7 bg-slate-50/70 p-2.5 rounded-lg border border-slate-100 space-y-1">
+                              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                Extracted Text
+                              </div>
+                              {decl.rawValue ? (
+                                <div>
+                                  <div className="font-mono text-xs text-slate-900 font-semibold break-words">
+                                    {decl.rawValue}
+                                  </div>
+                                  {decl.normalizedValue && decl.normalizedValue !== decl.rawValue && (
+                                    <div className="text-[11px] text-slate-500 mt-1">
+                                      <span className="font-semibold text-slate-600">Normalized:</span> {decl.normalizedValue}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-slate-400 italic">No declaration text detected</span>
+                              )}
+                            </div>
+
+                            {/* Evidence Citation & Link */}
+                            <div className="md:col-span-5 bg-slate-50/70 p-2.5 rounded-lg border border-slate-100 space-y-1">
+                              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+                                <span>Visual Evidence</span>
+                                {decl.evidenceImageSequence && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const foundImg = currentSample?.images?.find(
+                                        (i) => i.imageId === decl.evidenceImageId || i.sequence === decl.evidenceImageSequence
+                                      ) || currentSample?.images?.[0];
+                                      if (foundImg) {
+                                        setSelectedImageForView(foundImg);
+                                      }
+                                    }}
+                                    className="text-blue-600 hover:text-blue-800 font-bold inline-flex items-center space-x-1 cursor-pointer"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    <span>Photo #{decl.evidenceImageSequence}</span>
+                                  </button>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-slate-600 italic leading-snug">
+                                {decl.evidenceDescription || 'No specific location specified.'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Inspector Verification Bar */}
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-slate-500 font-medium">Inspector Review:</span>
+                              <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
+                                isConfirmed
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : isIncorrect
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : isUnclear
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {decl.inspectorReview?.status || 'PENDING'}
+                              </span>
+                              {decl.inspectorReview?.reviewedBy && (
+                                <span className="text-[10px] text-slate-400">
+                                  by {decl.inspectorReview.reviewedBy}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center space-x-1">
+                              <button
+                                type="button"
+                                disabled={isReviewing}
+                                onClick={() => handleReview(decl.category, 'CONFIRMED')}
+                                title="Confirm extraction is correct"
+                                className={`px-2 py-1 rounded text-[11px] font-medium transition-colors flex items-center space-x-1 cursor-pointer ${
+                                  isConfirmed
+                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                    : 'bg-slate-100 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700'
+                                }`}
+                              >
+                                <Check className="w-3 h-3" />
+                                <span>Confirm</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={isReviewing}
+                                onClick={() => handleReview(decl.category, 'INCORRECT')}
+                                title="Flag extraction as incorrect"
+                                className={`px-2 py-1 rounded text-[11px] font-medium transition-colors flex items-center space-x-1 cursor-pointer ${
+                                  isIncorrect
+                                    ? 'bg-rose-600 text-white shadow-xs'
+                                    : 'bg-slate-100 text-slate-700 hover:bg-rose-50 hover:text-rose-700'
+                                }`}
+                              >
+                                <X className="w-3 h-3" />
+                                <span>Flag Incorrect</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={isReviewing}
+                                onClick={() => handleReview(decl.category, 'UNCLEAR')}
+                                title="Flag extraction as unclear or blurry"
+                                className={`px-2 py-1 rounded text-[11px] font-medium transition-colors flex items-center space-x-1 cursor-pointer ${
+                                  isUnclear
+                                    ? 'bg-amber-600 text-white shadow-xs'
+                                    : 'bg-slate-100 text-slate-700 hover:bg-amber-50 hover:text-amber-700'
+                                }`}
+                              >
+                                <span>Flag Unclear</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Right 1 Col: Phase 9 Package Visual Evidence & Future Phase Placeholders */}
@@ -659,24 +1081,10 @@ export const SampleWorkspace: React.FC = () => {
           {/* Future Pipeline Placeholders */}
           <Card className="border-slate-200 shadow-xs">
             <CardHeader
-              title="Future Analysis Pipeline"
-              subtitle="Downstream AI extraction & rules"
+              title="Downstream Pipeline"
+              subtitle="Statutory compliance & verification"
             />
             <CardContent className="space-y-3 text-xs">
-              {/* Phase 10 OCR Placeholder */}
-              <div className="p-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 space-y-1.5">
-                <div className="flex items-center space-x-2 text-slate-500 font-bold">
-                  <FileSearch className="w-4 h-4 text-slate-400" />
-                  <span>Phase 10: Gemini Vision OCR</span>
-                </div>
-                <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Automated multimodal text extraction of MRP, Net Quantity, Best Before, and Consumer Care details.
-                </p>
-                <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-600">
-                  Disabled in Phase 9
-                </span>
-              </div>
-
               {/* Phase 11 Rule Engine Placeholder */}
               <div className="p-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 space-y-1.5">
                 <div className="flex items-center space-x-2 text-slate-500 font-bold">
@@ -687,7 +1095,21 @@ export const SampleWorkspace: React.FC = () => {
                   Deterministic evaluation against Legal Metrology Rules 2011 to generate candidate compliance findings.
                 </p>
                 <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-600">
-                  Disabled in Phase 9
+                  Pending Phase 11
+                </span>
+              </div>
+
+              {/* Phase 12 Compliance Findings Placeholder */}
+              <div className="p-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 space-y-1.5">
+                <div className="flex items-center space-x-2 text-slate-500 font-bold">
+                  <ShieldAlert className="w-4 h-4 text-slate-400" />
+                  <span>Phase 12: Compliance Verification</span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Inspector verification, manual overrides, and final statutory compliance determination.
+                </p>
+                <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-600">
+                  Pending Phase 12
                 </span>
               </div>
             </CardContent>

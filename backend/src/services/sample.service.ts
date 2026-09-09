@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { Inspection, IInspection, Sample, ISample, ISampleImage, SampleStatus, UserRole } from '../models';
+import { Inspection, IInspection, Sample, ISample, ISampleImage, SampleStatus, UserRole, AIExtraction, ExtractionStatus } from '../models';
 import {
   parseImagePayload,
   saveTemporaryImage,
@@ -404,6 +404,14 @@ export class SampleService {
 
     await sample.save();
 
+    // Mark previous extractions as STALE since image set changed
+    if (mongoose.Types.ObjectId.isValid(sample._id)) {
+      await AIExtraction.updateMany(
+        { sampleId: sample._id, status: { $ne: ExtractionStatus.STALE } },
+        { $set: { status: ExtractionStatus.STALE } }
+      );
+    }
+
     const allSamples = await Sample.find({ inspectionId: inspection._id }).sort({ sampleNumber: 1 });
     const progress = this.computeProgress(inspection.samplesCount, allSamples);
 
@@ -525,6 +533,14 @@ export class SampleService {
     }
 
     await sample.save();
+
+    // Mark previous extractions as STALE since image set changed
+    if (mongoose.Types.ObjectId.isValid(sample._id)) {
+      await AIExtraction.updateMany(
+        { sampleId: sample._id, status: { $ne: ExtractionStatus.STALE } },
+        { $set: { status: ExtractionStatus.STALE } }
+      );
+    }
 
     const allSamples = await Sample.find({ inspectionId: inspection._id }).sort({ sampleNumber: 1 });
     const progress = this.computeProgress(inspection.samplesCount, allSamples);

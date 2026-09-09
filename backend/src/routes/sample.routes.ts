@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth, requireRole } from '../middleware/auth.middleware';
 import { UserRole } from '../models';
 import { SampleController } from '../controllers/sample.controller';
+import { AIController } from '../controllers/ai.controller';
 
 const router = Router({ mergeParams: true });
 
@@ -63,6 +64,38 @@ router.get('/:sampleId/images/:imageId', SampleController.streamImage);
  * @access  Private (Inspector only; Assistant Controller gets 403)
  */
 router.delete('/:sampleId/images/:imageId', requireRole(UserRole.INSPECTOR), SampleController.deleteImage);
+
+/**
+ * @route   POST /api/inspections/:inspectionId/samples/:sampleId/ai-analysis
+ * @desc    Trigger AI multimodal package declaration extraction
+ * @access  Private (Inspector only; Assistant Controller gets 403)
+ */
+router.post(
+  '/:sampleId/ai-analysis',
+  requireRole(UserRole.INSPECTOR),
+  AIController.analyzeSample
+);
+
+/**
+ * @route   GET /api/inspections/:inspectionId/samples/:sampleId/ai-extractions
+ * @desc    Get package declaration extractions for a sample
+ * @access  Private (Owner Inspector or Assistant Controller)
+ */
+router.get(
+  '/:sampleId/ai-extractions',
+  AIController.getSampleExtractions
+);
+
+/**
+ * @route   PATCH /api/inspections/:inspectionId/samples/:sampleId/ai-extractions/:extractionId/declarations/:category
+ * @desc    Record Inspector review/confirmation for a declaration category
+ * @access  Private (Inspector only; Assistant Controller gets 403)
+ */
+router.patch(
+  '/:sampleId/ai-extractions/:extractionId/declarations/:category',
+  requireRole(UserRole.INSPECTOR),
+  AIController.reviewDeclaration
+);
 
 export default router;
 
