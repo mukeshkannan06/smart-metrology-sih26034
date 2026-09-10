@@ -18,7 +18,7 @@
 import { GeminiProvider, PROMPT_VERSION } from '../backend/src/ai/geminiProvider';
 import { ALL_DECLARATION_CATEGORIES } from '../backend/src/ai/aiProvider.interface';
 
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = 'http://127.0.0.1:5000/api';
 
 // 1x1 valid JPEG image buffer for testing
 const TINY_JPEG_BASE64 =
