@@ -1,6 +1,8 @@
 import dotenv from 'dotenv';
+import path from 'path';
 
-// Load environment variables from .env
+// Load environment variables from backend/.env or root .env
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config();
 
 export interface AppConfig {

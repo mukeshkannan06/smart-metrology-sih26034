@@ -1,8 +1,7 @@
 # Smart Metrology — Development Status Log
 
 Project: Smart Metrology (SIH26034)  
-Current Phase: Phase 10 — Gemini Multimodal AI + OCR + Package Declaration Extraction  
-Current Phase: Phase 11 — Rule Database & Deterministic Rule Engine  
+Current Phase: Phase 12 — Compliance Findings & Inspector Verification  
 Status: IMPLEMENTATION COMPLETE — WAITING FOR HUMAN APPROVAL  
 
 ---
@@ -20,11 +19,9 @@ Status: IMPLEMENTATION COMPLETE — WAITING FOR HUMAN APPROVAL
 | **Phase 7** | **New Inspection Workflow & Package Context** | **APPROVED** | 09 Sep 2026 |
 | **Phase 8** | **Multi-Sample Inspection Flow** | **APPROVED** | 09 Sep 2026 |
 | **Phase 9** | **Camera Capture & Temporary Image Handling** | **APPROVED** | 09 Sep 2026 |
-| **Phase 10** | **Gemini Multimodal AI + OCR + Package Declaration Extraction** | **IMPLEMENTATION COMPLETE** | *Pending Review* |
-| Phase 11 | Rule Database & Deterministic Rule Engine | NOT_STARTED | — |
 | **Phase 10** | **Gemini Multimodal AI + OCR + Package Declaration Extraction** | **APPROVED** | 09 Sep 2026 |
-| **Phase 11** | **Rule Database & Deterministic Rule Engine** | **IMPLEMENTATION COMPLETE** | *Pending Review* |
-| Phase 12 | Compliance Findings & Inspector Verification | NOT_STARTED | — |
+| **Phase 11** | **Rule Database & Deterministic Rule Engine** | **APPROVED** | 10 Sep 2026 |
+| **Phase 12** | **Compliance Findings & Inspector Verification** | **IMPLEMENTATION COMPLETE** | *Pending Review* |
 | Phase 13 | Inspection History, Evidence & Audit Logs | NOT_STARTED | — |
 | Phase 14 | Consolidated PDF Reporting (jsPDF) | NOT_STARTED | — |
 | Phase 15 | Assistant Controller Analytics (Recharts) | NOT_STARTED | — |
@@ -445,3 +442,52 @@ Status: IMPLEMENTATION COMPLETE — WAITING FOR HUMAN APPROVAL
   * **Parity Test (`backend/src/rules/verify_dataset.ts`)**: 33/33 rules $\times$ 29 fields match 100%.
   * **Build Verification**: Backend `tsc` passed with 0 errors; Frontend `tsc && vite build` passed with 0 errors (2,229 modules transformed).
   * **Database Verification**: Exactly 33 rules seeded in MongoDB Atlas.
+
+---
+
+## 16. Phase 12 Accomplishments — Compliance Findings & Inspector Verification
+
+* **3-Layer Separation Architecture**:
+  * Established strict separation between:
+    1. **Layer A (AI Observation — Immutable)**: `state`, `extractedValue`, `normalizedValue`, `confidence`, `evidenceImageIds`, `evidenceDescriptions`. Original OCR extractions are never overwritten or mutated.
+    2. **Layer B (Rule Engine Result)**: `outcome`, `reason`, `applicabilityExplanation`, `requiresInspectorReview`, `ruleDatabaseVersion`, `amendmentVersion`, `evaluatedAt`.
+    3. **Layer C (Inspector Verification — Final Human Authority)**: `isVerified`, `decision`, `verifiedValue`, `originalAiValuePreserved`, `isCorrected`, `notes`, `verifiedBy`, `verifiedByName`, `verifiedAt`.
+* **Mongoose Schema & Model (`backend/src/models/Finding.ts`)**:
+  * Implemented `ComplianceFinding` with compound unique index on `{ sampleId: 1, ruleId: 1 }` preventing duplicate finding generation.
+  * Indexed `{ inspectionId: 1 }`, `{ status: 1 }`, `{ isVerified: 1 }`.
+  * Preserved candidate vs verified status separation (`COMPLIANT_CANDIDATE`, `POTENTIAL_NON_COMPLIANCE`, `REQUIRES_INSPECTOR_REVIEW`, `NOT_APPLICABLE` vs `VERIFIED_COMPLIANT`, `VERIFIED_NON_COMPLIANT`, `VERIFIED_NOT_APPLICABLE`, `VERIFIED_REQUIRES_FURTHER_REVIEW`).
+* **Backend Finding Service (`backend/src/services/finding.service.ts`)**:
+  * `syncFindingsFromEvaluation(evaluationDoc)`: Automatically maps 33 evaluated statutory rules into candidate compliance findings upon Rule Engine completion.
+  * `getInspectionFindings`: Scoped by user role with aggregate and filtered telemetry calculation.
+  * `getSampleFindings`: Scoped by child sample with auto-sync fallback if findings are not yet created.
+  * `verifyFinding`: Records inspector decision, officer attribution (`verifiedBy`, `verifiedByName`), timestamp, and notes. Enforces individual human verification (prohibiting bulk "Verify All").
+  * `correctFinding`: Allows field officers to correct misread OCR values while preserving `originalAiValuePreserved` intact.
+  * Automatically transitions sample status to `VERIFIED` when 100% of sample findings are verified.
+* **REST APIs & Security Architecture**:
+  * `GET /api/findings/inspections/:inspectionId`: Role-guarded findings list with telemetry.
+  * `GET /api/findings/samples/:sampleId`: Child sample findings list.
+  * `GET /api/findings/:findingId`: Single finding detail.
+  * `POST /api/findings/:findingId/verify`: Restricted to `INSPECTOR` role; returns HTTP 403 Forbidden for `ASSISTANT_CONTROLLER` and cross-inspectors.
+  * `POST /api/findings/:findingId/correct`: Restricted to `INSPECTOR` role; returns HTTP 403 Forbidden for `ASSISTANT_CONTROLLER` and cross-inspectors.
+  * Mounted in `backend/src/routes/index.ts` under `/findings`.
+* **Dynamic Frontend Workbench (`frontend/src/pages/inspector/ComplianceFindings.tsx`)**:
+  * Complete interactive inspection workbench replacing previous static mockup:
+    * Quick inspection switcher dropdown.
+    * Multi-sample pill selector with verified indicator badges.
+    * Real-time Telemetry Strip (Total Checks, Verified %, Compliant, Non-Compliances, Requires Review, Not Applicable).
+    * Filter tabs with dynamic counts (`All`, `Potential Non-Compliances`, `Requires Review`, `Compliant Candidates`, `Verified`, `Exempt / N/A`).
+    * Real-time text search across rules, legal sections, and declarations.
+    * Side-by-side Observation vs Statutory Requirement finding cards.
+    * Click-to-enlarge Evidence Lightbox viewer for package photos.
+    * Inspector verification modal with decision selection and justification notes.
+    * Inline value correction modal with legal immutability guarantee banner.
+    * Role-adaptive view: Assistant Controllers receive clear `Supervisory Mode (Read-Only)` badges with disabled mutation controls.
+* **Workspace Integration**:
+  * `SampleWorkspace.tsx`: Updated downstream card to active Phase 12 verification with direct button into findings workbench.
+  * `InspectionWorkspace.tsx`: Added direct `Compliance Findings` action button and updated roadmap status banner.
+* **Testing & Build Verification**:
+  * **Phase 12 Automated Test Suite (`scratch/test_phase12_findings.ts`)**: 36/36 tests passed 100% across Schema & Indexes, Auto-Generation, Immutability Guarantee, Verification Transitions, RBAC Security Guards, and Full Sample Verification Completion.
+  * **Phase 11 Unit Tests Regression (`backend/test/rule_engine.test.ts`)**: 14/14 tests passed 100%.
+  * **Dataset Parity Regression (`backend/src/rules/verify_dataset.ts`)**: 33/33 rules $\times$ 29 fields match 100%.
+  * **Backend TypeScript**: `npm --prefix backend run build` passed with 0 errors.
+  * **Frontend Bundle**: `npm --prefix frontend run build` passed with 0 errors (2,230 modules transformed).

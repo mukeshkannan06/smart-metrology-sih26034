@@ -5,6 +5,7 @@ import dashboardRoutes from './dashboard.routes';
 import inspectionRoutes from './inspection.routes';
 import ruleRoutes from './rule.routes';
 import ruleEngineRoutes from './ruleEngine.routes';
+import findingRoutes from './finding.routes';
 
 const apiRouter = Router();
 
@@ -25,6 +26,9 @@ apiRouter.use('/rules', ruleRoutes);
 
 // Mount Rule Engine endpoints (/api/rule-engine/...)
 apiRouter.use('/rule-engine', ruleEngineRoutes);
+
+// Mount Compliance Findings endpoints (/api/findings/...)
+apiRouter.use('/findings', findingRoutes);
 
 export default apiRouter;
 

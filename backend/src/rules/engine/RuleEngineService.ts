@@ -1,7 +1,7 @@
 import { Types } from 'mongoose';
 import { Rule, IRule, RuleOperationalStatus } from '../../models/Rule';
 import { Inspection, PackageContext } from '../../models/Inspection';
-import { Sample } from '../../models/Sample';
+import { Sample, SampleStatus } from '../../models/Sample';
 import { AIExtraction } from '../../models/AIExtraction';
 import {
   RuleEvaluation,
@@ -15,6 +15,7 @@ import { RuleVersionResolver } from './RuleVersionResolver';
 import { RuleConditionEvaluator, EvaluationContext } from './RuleConditionEvaluator';
 import { RuleValidatorRegistry } from './RuleValidatorRegistry';
 import { DeclarationExtraction } from '../../ai/aiProvider.interface';
+import { FindingService } from '../../services/finding.service';
 
 // Mapping between OCR declaration categories and database ocr_field values
 const DECLARATION_TO_OCR_FIELD_MAP: Record<string, string[]> = {
@@ -121,6 +122,19 @@ export class RuleEngineService {
       evaluated_at: new Date(),
       evaluated_by: evaluatorId,
     });
+
+    // 8. Phase 12: Automatically synchronize Compliance Findings
+    try {
+      await FindingService.syncFindingsFromEvaluation(evaluationDoc);
+    } catch (findingSyncErr) {
+      console.error('Failed to sync findings from evaluation:', findingSyncErr);
+    }
+
+    // 9. Auto-advance sample status to EVALUATED if not already VERIFIED
+    if (sample.status !== SampleStatus.VERIFIED) {
+      sample.status = SampleStatus.EVALUATED;
+      await sample.save();
+    }
 
     return evaluationDoc;
   }

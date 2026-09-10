@@ -57,7 +57,7 @@ export interface CreateSampleResponse {
 
 export const SAMPLE_STATUS_META: Record<
   string,
-  { label: string; badgeVariant: 'neutral' | 'warning' | 'info' | 'success'; description: string }
+  { label: string; badgeVariant: 'neutral' | 'warning' | 'info' | 'success' | 'purple'; description: string }
 > = {
   [SampleStatus.PENDING]: {
     label: 'Pending',
@@ -77,12 +77,22 @@ export const SAMPLE_STATUS_META: Record<
   [SampleStatus.READY_FOR_ANALYSIS]: {
     label: 'Ready for Analysis',
     badgeVariant: 'info',
-    description: 'Sample unit prepared; ready for Vision OCR extraction and deterministic rule evaluation in future phases.',
+    description: 'Sample unit prepared; ready for Vision OCR extraction and deterministic rule evaluation.',
+  },
+  [SampleStatus.EXTRACTED]: {
+    label: 'AI Extracted',
+    badgeVariant: 'info',
+    description: 'Statutory declarations extracted by multimodal AI.',
+  },
+  [SampleStatus.EVALUATED]: {
+    label: 'Rules Evaluated',
+    badgeVariant: 'purple',
+    description: 'Legal Metrology rules deterministically evaluated.',
   },
   [SampleStatus.VERIFIED]: {
     label: 'Verified',
     badgeVariant: 'success',
-    description: 'Sample examination completed and recorded.',
+    description: 'Sample examination completed and findings verified.',
   },
 };
 

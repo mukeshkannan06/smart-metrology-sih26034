@@ -70,8 +70,6 @@ function parseCSVLine(line: string): string[] {
 }
 
 async function verify() {
-  const jsonPath = path.resolve('src/rules/data/SIH26034_LMPC_Rule_Database_v1.0.json');
-  const csvPath = path.resolve('src/rules/data/SIH26034_LMPC_Rule_Database_v1.0.csv');
   const jsonPath = path.resolve(__dirname, 'data/SIH26034_LMPC_Rule_Database_v1.0.json');
   const csvPath = path.resolve(__dirname, 'data/SIH26034_LMPC_Rule_Database_v1.0.csv');
 

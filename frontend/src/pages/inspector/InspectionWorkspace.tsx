@@ -9,6 +9,7 @@ import {
   AlertCircle,
   Loader2,
   ArrowLeft,
+  ArrowRight,
   Camera,
   FileSearch,
   Sparkles,
@@ -17,6 +18,8 @@ import {
   ExternalLink,
   Clock,
   CheckCircle,
+  ShieldCheck,
+  Eye,
 } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card, CardHeader, CardContent } from '../../components/ui/Card';
@@ -115,6 +118,8 @@ export const InspectionWorkspace: React.FC = () => {
       const result = await createSample(inspection._id);
       setSamples((prev) => [...prev, result.sample]);
       setProgress(result.progress);
+      // Seamless Flow: Directly navigate into the new specimen's workspace to examine it!
+      navigate(`/inspector/inspections/${inspection._id}/samples/${result.sample._id}`);
     } catch (err: unknown) {
       setSampleError(err instanceof Error ? err.message : 'Failed to add sample.');
     } finally {
@@ -190,6 +195,26 @@ export const InspectionWorkspace: React.FC = () => {
               icon={<ArrowLeft className="w-3.5 h-3.5" />}
             >
               All Inspections
+            </Button>
+            {samples.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  navigate(`/inspector/inspections/${inspection._id}/samples/${samples[0]._id}`)
+                }
+                icon={<Eye className="w-3.5 h-3.5 text-blue-600" />}
+              >
+                Examine Specimen #1
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/inspector/findings?inspectionId=${inspection._id}`)}
+              icon={<ShieldCheck className="w-3.5 h-3.5 text-blue-600" />}
+            >
+              Compliance Findings
             </Button>
             <Button
               variant="primary"
@@ -312,6 +337,26 @@ export const InspectionWorkspace: React.FC = () => {
           action={
             <div className="flex items-center space-x-3">
               <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/inspector/findings?inspectionId=${inspection._id}`)}
+                icon={<ShieldCheck className="w-3.5 h-3.5 text-blue-600" />}
+              >
+                Compliance Findings
+              </Button>
+              {samples.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    navigate(`/inspector/inspections/${inspection._id}/samples/${samples[0]._id}`)
+                  }
+                  icon={<Eye className="w-3.5 h-3.5 text-blue-600" />}
+                >
+                  Examine Sample #01
+                </Button>
+              )}
+              <Button
                 variant="primary"
                 size="sm"
                 disabled={isAddingSample || (progress ? progress.isComplete : false)}
@@ -325,10 +370,10 @@ export const InspectionWorkspace: React.FC = () => {
                 }
               >
                 {isAddingSample
-                  ? 'Adding Sample...'
+                  ? 'Opening New Sample...'
                   : progress?.isComplete
-                  ? 'All Samples Added'
-                  : `Add Sample #${samples.length + 1}`}
+                  ? 'All Units Added'
+                  : `+ Add & Examine Sample #${samples.length + 1}`}
               </Button>
             </div>
           }
@@ -404,7 +449,7 @@ export const InspectionWorkspace: React.FC = () => {
               <Layers className="w-8 h-8 text-slate-300 mx-auto" />
               <div className="text-xs font-bold text-slate-700">No Samples Added Yet</div>
               <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                Begin physical inspection by registering the first of {inspection.samplesCount} planned package specimens.
+                Begin physical inspection by registering the first of {inspection.samplesCount} planned package specimens. You will be taken immediately to its examination workspace.
               </p>
               <Button
                 variant="primary"
@@ -413,7 +458,7 @@ export const InspectionWorkspace: React.FC = () => {
                 disabled={isAddingSample}
                 icon={<PlusCircle className="w-3.5 h-3.5" />}
               >
-                Add Sample #1
+                + Create & Examine Sample #1
               </Button>
             </div>
           ) : (
@@ -438,8 +483,16 @@ export const InspectionWorkspace: React.FC = () => {
                       };
 
                     return (
-                      <tr key={sample._id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="px-4 py-3 font-mono font-bold text-blue-700">
+                      <tr
+                        key={sample._id}
+                        onClick={() =>
+                          navigate(
+                            `/inspector/inspections/${inspection._id}/samples/${sample._id}`
+                          )
+                        }
+                        className="hover:bg-blue-50/60 transition-colors cursor-pointer group"
+                      >
+                        <td className="px-4 py-3 font-mono font-bold text-blue-700 group-hover:text-blue-800">
                           {sample.sampleCode}
                         </td>
                         <td className="px-4 py-3 font-semibold text-slate-800">
@@ -459,17 +512,18 @@ export const InspectionWorkspace: React.FC = () => {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <Button
-                            variant="outline"
+                            variant="primary"
                             size="sm"
-                            onClick={() =>
+                            onClick={(e) => {
+                              e.stopPropagation();
                               navigate(
                                 `/inspector/inspections/${inspection._id}/samples/${sample._id}`
-                              )
-                            }
-                            icon={<ExternalLink className="w-3.5 h-3.5" />}
-                            className="text-xs"
+                              );
+                            }}
+                            icon={<ArrowRight className="w-3.5 h-3.5" />}
+                            className="text-xs font-semibold shadow-2xs"
                           >
-                            Open Unit
+                            Examine Specimen
                           </Button>
                         </td>
                       </tr>
@@ -491,14 +545,14 @@ export const InspectionWorkspace: React.FC = () => {
           <div className="space-y-1">
             <div className="flex items-center space-x-2">
               <span className="font-bold text-xs text-blue-950">
-                Phase 8 Active: Multi-Sample Lifecycle Foundation
+                Phase 12 Active: Compliance Findings & Verification
               </span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold">
-                1:N Parent-Child Verified
+                Officer Authority Active
               </span>
             </div>
             <p className="text-xs text-blue-800/90 leading-relaxed">
-              Parent inspection <strong className="font-mono">{inspection.inspectionNumber}</strong> currently contains <strong className="font-semibold">{samples.length}</strong> of <strong className="font-semibold">{inspection.samplesCount}</strong> child sample units. In Phase 9, camera capture will attach photos to each individual sample record.
+              Parent case <strong className="font-mono">{inspection.inspectionNumber}</strong> contains <strong className="font-semibold">{samples.length}</strong> child sample units. Deterministic Rule Engine evaluations are generated, and findings can be verified in the Compliance Findings Workbench.
             </p>
           </div>
         </div>
