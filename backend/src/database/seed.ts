@@ -146,6 +146,7 @@ async function runSeed(): Promise<void> {
 
     // ----------------------------------------------------
     // 4. Core Legal Metrology Rules (LMPC Rules 2011)
+    // 4. Core Legal Metrology Rules (Authoritative LMPC Database v1.0)
     // ----------------------------------------------------
     console.log('\n[4/4] Seeding Core LMPC Statutory Rules...');
     const statutoryRules = [
@@ -270,6 +271,10 @@ async function runSeed(): Promise<void> {
         status: RuleStatus.ACTIVE,
       },
     ];
+    console.log('\n[4/4] Ingesting Authoritative LMPC Rule Database v1.0 (33 rules)...');
+    const { seedAuthoritativeRules } = await import('./seedRules');
+    const ruleResult = await seedAuthoritativeRules();
+    console.log(`    ✓ Authoritative Rule Database populated: ${ruleResult.total} rules verified.`);
 
     for (const ruleData of statutoryRules) {
       await Rule.findOneAndUpdate(

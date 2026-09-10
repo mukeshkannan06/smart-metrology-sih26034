@@ -3,5 +3,6 @@ export * from './Inspection';
 export * from './Sample';
 export * from './Rule';
 export * from './AIExtraction';
+export * from './RuleEvaluation';
 
 

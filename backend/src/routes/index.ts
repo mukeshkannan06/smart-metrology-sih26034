@@ -3,6 +3,8 @@ import healthRoutes from './health.routes';
 import authRoutes from './auth.routes';
 import dashboardRoutes from './dashboard.routes';
 import inspectionRoutes from './inspection.routes';
+import ruleRoutes from './rule.routes';
+import ruleEngineRoutes from './ruleEngine.routes';
 
 const apiRouter = Router();
 
@@ -17,6 +19,12 @@ apiRouter.use('/dashboard', dashboardRoutes);
 
 // Mount Inspection endpoints (/api/inspections/...)
 apiRouter.use('/inspections', inspectionRoutes);
+
+// Mount Rule Database endpoints (/api/rules/...)
+apiRouter.use('/rules', ruleRoutes);
+
+// Mount Rule Engine endpoints (/api/rule-engine/...)
+apiRouter.use('/rule-engine', ruleEngineRoutes);
 
 export default apiRouter;
 

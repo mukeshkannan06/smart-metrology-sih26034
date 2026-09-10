@@ -3,6 +3,7 @@ import { requireAuth, requireRole } from '../middleware/auth.middleware';
 import { UserRole } from '../models';
 import { SampleController } from '../controllers/sample.controller';
 import { AIController } from '../controllers/ai.controller';
+import { RuleController } from '../controllers/rule.controller';
 
 const router = Router({ mergeParams: true });
 
@@ -95,6 +96,27 @@ router.patch(
   '/:sampleId/ai-extractions/:extractionId/declarations/:category',
   requireRole(UserRole.INSPECTOR),
   AIController.reviewDeclaration
+);
+
+/**
+ * @route   POST /api/inspections/:inspectionId/samples/:sampleId/rule-evaluation
+ * @desc    Execute deterministic rule engine evaluation for a sample
+ * @access  Private (Inspector only)
+ */
+router.post(
+  '/:sampleId/rule-evaluation',
+  requireRole(UserRole.INSPECTOR),
+  RuleController.evaluateSample
+);
+
+/**
+ * @route   GET /api/inspections/:inspectionId/samples/:sampleId/rule-evaluations
+ * @desc    Get deterministic rule engine evaluation results for a sample
+ * @access  Private (Inspector or Assistant Controller)
+ */
+router.get(
+  '/:sampleId/rule-evaluations',
+  RuleController.getSampleEvaluations
 );
 
 export default router;

@@ -26,6 +26,7 @@ import {
   Check,
   RefreshCw,
   AlertTriangle,
+  Scale,
 } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card, CardHeader, CardContent } from '../../components/ui/Card';
@@ -56,7 +57,14 @@ import {
   reviewDeclaration,
   ReviewStatus,
 } from '../../services/aiService';
+import {
+  RuleEvaluationData,
+  RuleEvaluationItem,
+  evaluateSampleRules,
+  fetchSampleEvaluations,
+} from '../../services/ruleService';
 import { CameraCaptureModal } from '../../components/camera/CameraCaptureModal';
+import { RuleEvaluationPanel } from '../../components/rules/RuleEvaluationPanel';
 
 export const SampleWorkspace: React.FC = () => {
   const { inspectionId, sampleId } = useParams<{ inspectionId: string; sampleId: string }>();
@@ -89,6 +97,13 @@ export const SampleWorkspace: React.FC = () => {
   const [analysisSuccess, setAnalysisSuccess] = useState<string | null>(null);
   const [isExtractionStale, setIsExtractionStale] = useState<boolean>(false);
   const [reviewingCategory, setReviewingCategory] = useState<string | null>(null);
+
+  // Phase 11 Deterministic Rule Engine state
+  const [ruleEvaluation, setRuleEvaluation] = useState<RuleEvaluationData | null>(null);
+  const [isEvaluatingRules, setIsEvaluatingRules] = useState<boolean>(false);
+  const [ruleEvaluationError, setRuleEvaluationError] = useState<string | null>(null);
+  const [ruleEvaluationSuccess, setRuleEvaluationSuccess] = useState<string | null>(null);
+  const [ruleFilterTab, setRuleFilterTab] = useState<'applicable' | 'violations' | 'review' | 'exempt' | 'all'>('applicable');
 
   useEffect(() => {
     let isMounted = true;
@@ -139,6 +154,16 @@ export const SampleWorkspace: React.FC = () => {
             }
           } catch {
             // Non-critical background extraction load
+          }
+
+          // Load Rule Engine evaluation for this sample
+          try {
+            const evalResp = await fetchSampleEvaluations(found._id);
+            if (isMounted && evalResp.latestEvaluation) {
+              setRuleEvaluation(evalResp.latestEvaluation);
+            }
+          } catch {
+            // Non-critical background evaluation load
           }
         }
       } catch (err: unknown) {
@@ -255,10 +280,36 @@ export const SampleWorkspace: React.FC = () => {
         setAnalysisSuccess('Package declarations extracted successfully via Gemini Multimodal AI.');
       }
       setTimeout(() => setAnalysisSuccess(null), 5000);
+
+      // Trigger automatic deterministic rule evaluation with new extractions
+      try {
+        const evalData = await evaluateSampleRules(res.sample._id);
+        setRuleEvaluation(evalData);
+      } catch {
+        // Non-fatal background evaluation
+      }
     } catch (err: unknown) {
       setAnalysisError(err instanceof Error ? err.message : 'AI declaration extraction failed.');
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleEvaluateRules = async () => {
+    if (!currentSample) return;
+    try {
+      setIsEvaluatingRules(true);
+      setRuleEvaluationError(null);
+      const evalData = await evaluateSampleRules(currentSample._id);
+      setRuleEvaluation(evalData);
+      setRuleEvaluationSuccess(
+        `Deterministic evaluation completed: ${evalData.summary.applicable_count} applicable rules resolved, ${evalData.summary.review_required_count} review required.`
+      );
+      setTimeout(() => setRuleEvaluationSuccess(null), 5000);
+    } catch (err: unknown) {
+      setRuleEvaluationError(err instanceof Error ? err.message : 'Deterministic rule evaluation failed.');
+    } finally {
+      setIsEvaluatingRules(false);
     }
   };
 
@@ -863,6 +914,21 @@ export const SampleWorkspace: React.FC = () => {
               )}
             </CardContent>
           </Card>
+
+          {/* Phase 11: Deterministic Rule Engine Evaluation Panel */}
+          {currentSample && (
+            <RuleEvaluationPanel
+              sampleId={currentSample._id}
+              sampleNumber={currentSample.sampleNumber}
+              packageContext={inspection?.packageContext || 'RETAIL_PACKAGE'}
+              commodity={inspection?.commodity || ''}
+              evaluation={ruleEvaluation}
+              isEvaluating={isEvaluatingRules}
+              onEvaluate={handleEvaluateRules}
+              error={ruleEvaluationError}
+              success={ruleEvaluationSuccess}
+            />
+          )}
         </div>
 
         {/* Right 1 Col: Phase 9 Package Visual Evidence & Future Phase Placeholders */}
@@ -1022,9 +1088,23 @@ export const SampleWorkspace: React.FC = () => {
                 <div className="flex items-center space-x-2 text-slate-500 font-bold">
                   <Sparkles className="w-4 h-4 text-slate-400" />
                   <span>Phase 11: LMPC Rule Engine</span>
+              {/* Phase 11 Deterministic Rule Engine Active */}
+              <div className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/60 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2 text-emerald-800 font-bold">
+                    <Scale className="w-4 h-4 text-emerald-600" />
+                    <span>Phase 11: Rule Engine</span>
+                  </div>
+                  <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-200 text-emerald-800">
+                    Active v1.0
+                  </span>
                 </div>
                 <p className="text-[11px] text-slate-500 leading-relaxed">
                   Deterministic evaluation against Legal Metrology Rules 2011 to generate candidate compliance findings.
+                <p className="text-[11px] text-emerald-950 leading-relaxed">
+                  {ruleEvaluation
+                    ? `${ruleEvaluation.summary.applicable_count} statutory rules applicable; ${ruleEvaluation.summary.review_required_count} review required.`
+                    : 'Deterministic Rule Engine v1.0 ready for evaluation.'}
                 </p>
                 <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-600">
                   Pending Phase 11
