@@ -2,6 +2,7 @@
 
 Project: Smart Metrology (SIH26034)  
 Current Phase: Phase 10 — Gemini Multimodal AI + OCR + Package Declaration Extraction  
+Current Phase: Phase 11 — Rule Database & Deterministic Rule Engine  
 Status: IMPLEMENTATION COMPLETE — WAITING FOR HUMAN APPROVAL  
 
 ---
@@ -21,6 +22,8 @@ Status: IMPLEMENTATION COMPLETE — WAITING FOR HUMAN APPROVAL
 | **Phase 9** | **Camera Capture & Temporary Image Handling** | **APPROVED** | 09 Sep 2026 |
 | **Phase 10** | **Gemini Multimodal AI + OCR + Package Declaration Extraction** | **IMPLEMENTATION COMPLETE** | *Pending Review* |
 | Phase 11 | Rule Database & Deterministic Rule Engine | NOT_STARTED | — |
+| **Phase 10** | **Gemini Multimodal AI + OCR + Package Declaration Extraction** | **APPROVED** | 09 Sep 2026 |
+| **Phase 11** | **Rule Database & Deterministic Rule Engine** | **IMPLEMENTATION COMPLETE** | *Pending Review* |
 | Phase 12 | Compliance Findings & Inspector Verification | NOT_STARTED | — |
 | Phase 13 | Inspection History, Evidence & Audit Logs | NOT_STARTED | — |
 | Phase 14 | Consolidated PDF Reporting (jsPDF) | NOT_STARTED | — |
@@ -395,6 +398,50 @@ Status: IMPLEMENTATION COMPLETE — WAITING FOR HUMAN APPROVAL
 * **Image Set Hash Caching**: Prevents redundant Gemini API calls and protects free-tier quota when analyzing identical image sets.
 * **1:N Inspection-to-Sample Hierarchy**: Preserved and strengthened with sample-level AI extraction documents.
 
+---
+
+## 15. Phase 11 Accomplishments — Rule Database & Deterministic Rule Engine
 
 
-
+* **Authoritative 33-Rule Statutory Dataset**:
+  * Ingested authoritative `SIH26034_LMPC_Rule_Database_v1.0.json` and `.csv` in `backend/src/rules/data/`.
+  * Verified 100% field-by-field parity across all 33 statutory rules $\times$ 29 schema fields via automated verification script (`backend/src/rules/verify_dataset.ts`).
+  * Preserved authoritative baseline origin (`v0.1`), database version (`1.0`), research cutoff (`2026-09-06`), and statutory review flags.
+* **29-Field Statutory Mongoose Model & Storage**:
+  * Created `Rule.ts` (`rules` collection) implementing the full 29-field statutory schema:
+    * `rule_id`, `rule_reference`, `declaration_type`, `requirement_description`, `human_condition_text`, `package_context`, `commodity_category`, `applicability_conditions`, `mandatory_status`, `evidence_type`, `ocr_field`, `validation_function`, `imported_status`, `quantity_condition`, `package_structure_condition`, `exemption_exception`, `effective_from`, `effective_to`, `amendment_version`, `source_document`, `source_section`, `source_page`, `source_url`, `inspector_review_required`, `rule_status`, `rule_family`, `notes`, `database_version`, `baseline_origin`.
+  * Configured unique indexes on `rule_id`, compound index `{ rule_id: 1, database_version: 1 }`, and query indexes on `package_context`, `rule_status`, and `rule_family`.
+* **Deterministic Rule Engine Architecture**:
+  * **Safe Condition Evaluator (`RuleConditionEvaluator.ts`)**:
+    * AST/clause tokenizer supporting boolean equality, compound `AND`, compound `OR`, set membership (`in {...}`), date comparisons (`>=`, `<=`), and numeric comparisons.
+    * **Zero `eval()` and zero `new Function()`** preventing arbitrary code execution.
+  * **Temporal Version Resolver (`RuleVersionResolver.ts`)**:
+    * Resolves active rule version based on inspection date.
+    * Suppresses future gazette rules (e.g. `LMPC-R6-ECOM-2027-001`, effective July 2027) as `INACTIVE` for 2026 inspections.
+    * Handles historical provisions (`LMPC-R5-HISTORY-001`) as non-enforceable audit guards.
+  * **Controlled Validator Registry (`RuleValidatorRegistry.ts`)**:
+    * Implemented and mapped all 33 statutory validation functions from the dataset.
+    * Enforced wholesale package safety (`suppress_wholesale_mrp` returning `NOT_APPLICABLE`) to prevent false retail MRP violations on shipping cartons.
+    * Implemented industrial/institutional scope exclusion (`evaluate_industrial_institutional_scope`).
+    * Unmapped or failing functions safely fail over to `REVIEW_REQUIRED`.
+  * **Service Orchestration (`RuleEngineService.ts`)**:
+    * Implemented deterministic 10-step applicability and validation pipeline.
+    * Integrated with Phase 10 AI extractions (`AIExtraction.ts`) and Phase 9 photo evidence without altering previous phases.
+    * Persisted immutable evaluation snapshots in `rule_evaluations` collection (`RuleEvaluation.ts`).
+* **REST APIs & Role-Based Access Control**:
+  * `GET /api/rules`: Scoped rule listing with search, status, family, and context filters.
+  * `GET /api/rules/statistics`: Aggregated statistical metrics derived dynamically from MongoDB.
+  * `GET /api/rules/validation/consistency`: Automated JSON vs CSV consistency verification.
+  * `GET /api/rules/:ruleId`: Complete 29-field statutory rule detail.
+  * `PATCH /api/rules/:ruleId/status`: Operational status toggle guarded by `requireRole(ASSISTANT_CONTROLLER)` (returns HTTP 403 Forbidden for Inspectors).
+  * `POST /api/rule-engine/evaluate/:sampleId`: Triggers deterministic evaluation guarded by `requireRole(INSPECTOR)`.
+  * `GET /api/rule-engine/samples/:sampleId/evaluations`: Evaluated rule history with ownership isolation.
+* **Frontend UI Components**:
+  * **Inspector Sample Workspace**: Embedded `RuleEvaluationPanel.tsx` in `SampleWorkspace.tsx` with "Run Rule Engine Evaluation" trigger, evaluation telemetry, and category filter tabs.
+  * **Rule Reference Directory**: Created `RuleReference.tsx` offering a read-only searchable statutory reference directory for field officers.
+  * **Assistant Controller Rule Database**: Created `RuleDatabase.tsx` providing a supervisory dashboard with dynamic KPI cards, search/filter, full 29-field modal, and status toggling.
+* **Testing & Verification**:
+  * **Unit Test Suite (`backend/test/rule_engine.test.ts`)**: 14/14 tests passed 100%.
+  * **Parity Test (`backend/src/rules/verify_dataset.ts`)**: 33/33 rules $\times$ 29 fields match 100%.
+  * **Build Verification**: Backend `tsc` passed with 0 errors; Frontend `tsc && vite build` passed with 0 errors (2,229 modules transformed).
+  * **Database Verification**: Exactly 33 rules seeded in MongoDB Atlas.

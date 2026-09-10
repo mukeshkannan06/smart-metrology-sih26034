@@ -9,8 +9,6 @@ import {
   InspectionStatus,
   Sample,
   SampleStatus,
-  Rule,
-  RuleStatus,
 } from '../models';
 
 /**
@@ -148,142 +146,10 @@ async function runSeed(): Promise<void> {
     // 4. Core Legal Metrology Rules (LMPC Rules 2011)
     // 4. Core Legal Metrology Rules (Authoritative LMPC Database v1.0)
     // ----------------------------------------------------
-    console.log('\n[4/4] Seeding Core LMPC Statutory Rules...');
-    const statutoryRules = [
-      {
-        ruleId: 'LMPC-R06-1-A',
-        ruleReference: 'Rule 6(1)(a)',
-        declarationType: 'NAME_AND_ADDRESS',
-        requirementDescription: 'Name and complete address of the manufacturer, or packer, or importer.',
-        packageContext: ['RETAIL_PACKAGE', 'WHOLESALE_PACKAGE', 'IMPORTED_PACKAGE'],
-        mandatoryStatus: true,
-        sourceDocument: 'Legal Metrology (Packaged Commodities) Rules, 2011',
-        sourceSection: 'Rule 6(1)(a)',
-        version: '2011.1',
-        status: RuleStatus.ACTIVE,
-      },
-      {
-        ruleId: 'LMPC-R06-1-B',
-        ruleReference: 'Rule 6(1)(b)',
-        declarationType: 'COMMON_GENERIC_NAME',
-        requirementDescription: 'Common or generic name of the commodity contained in the package.',
-        packageContext: ['RETAIL_PACKAGE', 'WHOLESALE_PACKAGE'],
-        mandatoryStatus: true,
-        sourceDocument: 'Legal Metrology (Packaged Commodities) Rules, 2011',
-        sourceSection: 'Rule 6(1)(b)',
-        version: '2011.1',
-        status: RuleStatus.ACTIVE,
-      },
-      {
-        ruleId: 'LMPC-R06-1-C',
-        ruleReference: 'Rule 6(1)(c)',
-        declarationType: 'NET_QUANTITY',
-        requirementDescription: 'Net quantity in terms of standard unit of weight, measure or number.',
-        packageContext: ['RETAIL_PACKAGE', 'WHOLESALE_PACKAGE'],
-        mandatoryStatus: true,
-        sourceDocument: 'Legal Metrology (Packaged Commodities) Rules, 2011',
-        sourceSection: 'Rule 6(1)(c)',
-        version: '2011.1',
-        status: RuleStatus.ACTIVE,
-      },
-      {
-        ruleId: 'LMPC-R06-1-D',
-        ruleReference: 'Rule 6(1)(d)',
-        declarationType: 'MONTH_YEAR_OF_MANUFACTURE',
-        requirementDescription: 'Month and year in which the commodity is manufactured or pre-packed or imported.',
-        packageContext: ['RETAIL_PACKAGE'],
-        mandatoryStatus: true,
-        sourceDocument: 'Legal Metrology (Packaged Commodities) Rules, 2011',
-        sourceSection: 'Rule 6(1)(d)',
-        version: '2011.1',
-        status: RuleStatus.ACTIVE,
-      },
-      {
-        ruleId: 'LMPC-R06-1-DA',
-        ruleReference: 'Rule 6(1)(da)',
-        declarationType: 'BEST_BEFORE_EXPIRY',
-        requirementDescription: 'Best before or use by date, month and year for commodities which may become unfit for consumption.',
-        packageContext: ['RETAIL_PACKAGE'],
-        mandatoryStatus: false,
-        sourceDocument: 'Legal Metrology (Packaged Commodities) Rules, 2011',
-        sourceSection: 'Rule 6(1)(da)',
-        version: '2011.1',
-        status: RuleStatus.ACTIVE,
-      },
-      {
-        ruleId: 'LMPC-R06-1-E',
-        ruleReference: 'Rule 6(1)(e)',
-        declarationType: 'MRP',
-        requirementDescription: 'Maximum retail price (MRP) inclusive of all taxes.',
-        packageContext: ['RETAIL_PACKAGE'],
-        mandatoryStatus: true,
-        sourceDocument: 'Legal Metrology (Packaged Commodities) Rules, 2011',
-        sourceSection: 'Rule 6(1)(e)',
-        version: '2011.1',
-        status: RuleStatus.ACTIVE,
-      },
-      {
-        ruleId: 'LMPC-R06-1-EA',
-        ruleReference: 'Rule 6(1)(ea)',
-        declarationType: 'UNIT_SALE_PRICE',
-        requirementDescription: 'Unit sale price (USP) in rupees per gram, kilogram, litre, or meter.',
-        packageContext: ['RETAIL_PACKAGE'],
-        mandatoryStatus: true,
-        sourceDocument: 'Legal Metrology (Packaged Commodities) Rules, 2011',
-        sourceSection: 'Rule 6(1)(ea)',
-        version: '2011.1',
-        status: RuleStatus.ACTIVE,
-      },
-      {
-        ruleId: 'LMPC-R06-1-F',
-        ruleReference: 'Rule 6(1)(f)',
-        declarationType: 'CONSUMER_CARE',
-        requirementDescription: 'Name, address, telephone number and email address of person or office to be contacted for consumer complaints.',
-        packageContext: ['RETAIL_PACKAGE'],
-        mandatoryStatus: true,
-        sourceDocument: 'Legal Metrology (Packaged Commodities) Rules, 2011',
-        sourceSection: 'Rule 6(1)(f)',
-        version: '2011.1',
-        status: RuleStatus.ACTIVE,
-      },
-      {
-        ruleId: 'LMPC-R06-1-G',
-        ruleReference: 'Rule 6(1)(g)',
-        declarationType: 'COUNTRY_OF_ORIGIN',
-        requirementDescription: 'Country of origin where the commodity is manufactured or produced.',
-        packageContext: ['RETAIL_PACKAGE', 'IMPORTED_PACKAGE'],
-        mandatoryStatus: true,
-        sourceDocument: 'Legal Metrology (Packaged Commodities) Rules, 2011',
-        sourceSection: 'Rule 6(1)(g)',
-        version: '2011.1',
-        status: RuleStatus.ACTIVE,
-      },
-      {
-        ruleId: 'LMPC-R07',
-        ruleReference: 'Rule 7',
-        declarationType: 'FONT_SIZE_AND_PROMINENCE',
-        requirementDescription: 'Declarations must be prominent, legible, and satisfy minimum font size standards relative to Principal Display Panel area.',
-        packageContext: ['RETAIL_PACKAGE'],
-        mandatoryStatus: true,
-        sourceDocument: 'Legal Metrology (Packaged Commodities) Rules, 2011',
-        sourceSection: 'Rule 7 & Table 1',
-        version: '2011.1',
-        status: RuleStatus.ACTIVE,
-      },
-    ];
     console.log('\n[4/4] Ingesting Authoritative LMPC Rule Database v1.0 (33 rules)...');
     const { seedAuthoritativeRules } = await import('./seedRules');
     const ruleResult = await seedAuthoritativeRules();
     console.log(`    ✓ Authoritative Rule Database populated: ${ruleResult.total} rules verified.`);
-
-    for (const ruleData of statutoryRules) {
-      await Rule.findOneAndUpdate(
-        { ruleId: ruleData.ruleId },
-        { $set: ruleData },
-        { upsert: true, returnDocument: 'after' }
-      );
-      console.log(`  ✓ Rule ${ruleData.ruleReference}: ${ruleData.declarationType}`);
-    }
 
     console.log('\n====================================================');
     console.log('✅ [SEED] Database seeded successfully!');
