@@ -1,16 +1,10 @@
-import React, { useState } from 'react';
-import { Database, Search, Plus, Filter, ShieldCheck, Edit3, ToggleLeft, ToggleRight, History } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import {
   Database,
   Search,
-  Filter,
   ShieldCheck,
   AlertTriangle,
   ExternalLink,
-  Calendar,
-  Layers,
-  FileText,
   Clock,
   CheckCircle2,
   RefreshCw,
@@ -18,7 +12,6 @@ import {
   X,
   ToggleLeft,
   ToggleRight,
-  Info,
   FileText,
 } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
@@ -34,64 +27,7 @@ import {
   updateRuleStatus,
 } from '../../services/ruleService';
 
-interface RuleItem {
-  id: string;
-  ruleRef: string;
-  declaration: string;
-  applicability: string;
-  version: string;
-  effectiveFrom: string;
-  status: 'active' | 'inactive';
-}
-
 export const RuleDatabase: React.FC = () => {
-  const [rules, setRules] = useState<RuleItem[]>([
-    {
-      id: 'RUL-001',
-      ruleRef: 'Rule 6(1)(a)',
-      declaration: 'Common / Generic Commodity Name',
-      applicability: 'Retail Packages',
-      version: 'v1.2',
-      effectiveFrom: '01 Nov 2011',
-      status: 'active',
-    },
-    {
-      id: 'RUL-002',
-      ruleRef: 'Rule 6(1)(b)',
-      declaration: 'Manufacturer / Packer / Importer Details',
-      applicability: 'All Packages (Retail, Wholesale, Imported)',
-      version: 'v1.1',
-      effectiveFrom: '01 Nov 2011',
-      status: 'active',
-    },
-    {
-      id: 'RUL-003',
-      ruleRef: 'Rule 6(1)(d)',
-      declaration: 'Net Quantity & Numeral Height (Table 1)',
-      applicability: 'All Packages by weight or volume',
-      version: 'v2.0',
-      effectiveFrom: '01 Jan 2018',
-      status: 'active',
-    },
-    {
-      id: 'RUL-004',
-      ruleRef: 'Rule 6(1)(e)',
-      declaration: 'Maximum Retail Price (MRP) & Unit Sale Price',
-      applicability: 'Retail Packages (Exempts Industrial)',
-      version: 'v2.3',
-      effectiveFrom: '01 Dec 2022',
-      status: 'active',
-    },
-    {
-      id: 'RUL-005',
-      ruleRef: 'Rule 6(1)(n)',
-      declaration: 'Country of Origin Declaration',
-      applicability: 'Imported Packages Strictly',
-      version: 'v1.4',
-      effectiveFrom: '01 Jan 2021',
-      status: 'active',
-    },
-  ]);
   const [rules, setRules] = useState<RuleItem[]>([]);
   const [statistics, setStatistics] = useState<RuleStatistics | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -102,12 +38,6 @@ export const RuleDatabase: React.FC = () => {
   const [selectedRule, setSelectedRule] = useState<RuleItem | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  const toggleStatus = (id: string) => {
-    setRules((prev) =>
-      prev.map((r) =>
-        r.id === id ? { ...r, status: r.status === 'active' ? 'inactive' : 'active' } : r
-      )
-    );
   const loadData = async () => {
     try {
       setLoading(true);
@@ -138,7 +68,6 @@ export const RuleDatabase: React.FC = () => {
       setRules((prev) =>
         prev.map((r) => (r.rule_id === rule.rule_id ? updated : r))
       );
-      // Reload stats
       const stats = await fetchRuleStatistics();
       setStatistics(stats);
     } catch (err: unknown) {
@@ -186,28 +115,24 @@ export const RuleDatabase: React.FC = () => {
   const getMandatoryBadge = (status: string) => {
     switch (status) {
       case 'MANDATORY':
-        return <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">Mandatory</span>;
         return (
           <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
             Mandatory
           </span>
         );
       case 'CONDITIONAL':
-        return <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">Conditional</span>;
         return (
           <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
             Conditional
           </span>
         );
       case 'NOT_APPLICABLE':
-        return <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">Not Applicable</span>;
         return (
           <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">
             Not Applicable
           </span>
         );
       case 'OPTIONAL':
-        return <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">Optional</span>;
         return (
           <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
             Optional
@@ -215,7 +140,6 @@ export const RuleDatabase: React.FC = () => {
         );
       case 'REQUIRES_INSPECTOR_REVIEW':
       default:
-        return <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded">Official Review</span>;
         return (
           <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded">
             Official Review
@@ -227,8 +151,6 @@ export const RuleDatabase: React.FC = () => {
   const columns: Column<RuleItem>[] = [
     {
       header: 'Rule ID',
-      accessor: 'id',
-      render: (row) => <span className="font-mono font-bold text-purple-700">{row.id}</span>,
       accessor: 'rule_id',
       render: (row) => (
         <span className="font-mono text-xs font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
@@ -237,9 +159,6 @@ export const RuleDatabase: React.FC = () => {
       ),
     },
     {
-      header: 'Rule Reference',
-      accessor: 'ruleRef',
-      render: (row) => <span className="font-mono font-bold text-slate-900">{row.ruleRef}</span>,
       header: 'Statutory Reference',
       accessor: 'rule_reference',
       render: (row) => (
@@ -250,24 +169,18 @@ export const RuleDatabase: React.FC = () => {
       ),
     },
     {
-      header: 'Regulated Declaration',
       header: 'Requirement & Scope',
       render: (row) => (
-        <div>
-          <div className="font-bold text-slate-800">{row.declaration}</div>
-          <div className="text-[11px] text-slate-400">{row.applicability}</div>
         <div className="max-w-md">
           <div className="font-semibold text-xs text-slate-800 leading-snug">
             {row.requirement_description}
           </div>
-          <div className="flex items-center gap-1.5 mt-1">
           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
             <span className="font-mono text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
               {row.package_context}
             </span>
             {getMandatoryBadge(row.mandatory_status)}
             {row.inspector_review_required && (
-              <span className="text-[10px] text-amber-700 bg-amber-50 px-1 rounded flex items-center gap-0.5" title="Requires Legal Metrology Inspector Review">
               <span
                 className="text-[10px] text-amber-700 bg-amber-50 px-1 rounded flex items-center gap-0.5"
                 title="Requires Legal Metrology Inspector Review"
@@ -280,59 +193,39 @@ export const RuleDatabase: React.FC = () => {
       ),
     },
     {
-      header: 'Version',
-      accessor: 'version',
       header: 'Rule Family',
       accessor: 'rule_family',
       render: (row) => (
-        <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-          {row.version}
         <span className="font-mono text-[11px] font-medium text-slate-700 px-2 py-0.5 bg-slate-100 rounded">
           {row.rule_family}
         </span>
       ),
     },
     {
-      header: 'Effective Date',
-      accessor: 'effectiveFrom',
-    },
-    {
       header: 'Status',
-      render: (row) => (
-        <Badge variant={row.status === 'active' ? 'success' : 'neutral'}>
-          {row.status === 'active' ? 'Active In Engine' : 'Deactivated'}
-        </Badge>
-      ),
       render: (row) => getStatusBadge(row.rule_status),
     },
     {
       header: 'Action',
       render: (row) => (
-        <div className="flex items-center space-x-1">
         <div className="flex items-center space-x-1.5">
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => alert(`Edit Rule dialog placeholder for ${row.ruleRef}. Full versioning & CRUD in Phase 11.`)}
             onClick={() => setSelectedRule(row)}
             className="text-xs p-1"
-            title="Edit Rule"
             title="Inspect Statutory Metadata"
           >
-            <Edit3 className="w-3.5 h-3.5 text-slate-600" />
             <Eye className="w-4 h-4 text-blue-600" />
           </Button>
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => toggleStatus(row.id)}
             disabled={togglingId === row.rule_id}
             onClick={() => handleToggleStatus(row)}
             className="text-xs p-1"
-            title="Toggle Status"
             title="Toggle Active/Inactive"
           >
-            {row.status === 'active' ? (
             {row.rule_status === 'ACTIVE' ? (
               <ToggleRight className="w-5 h-5 text-emerald-600" />
             ) : (
@@ -347,8 +240,6 @@ export const RuleDatabase: React.FC = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Rule Database Management"
-        subtitle="Supervisory governance of codified Legal Metrology rules, applicability parameters, and version histories"
         title="LMPC Rule Database Governance"
         subtitle="Supervisory oversight of codified Legal Metrology rules, statutory amendments, and deterministic engine applicability"
         badge={<Badge variant="purple">Deterministic Engine v1.0</Badge>}
@@ -358,15 +249,11 @@ export const RuleDatabase: React.FC = () => {
         ]}
         actions={
           <Button
-            variant="primary"
             variant="outline"
             size="sm"
-            icon={<Plus className="w-3.5 h-3.5" />}
-            onClick={() => alert('New Rule creation will be implemented in Phase 11')}
             icon={<RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />}
             onClick={loadData}
           >
-            Add New Rule
             Refresh Dataset
           </Button>
         }
@@ -375,7 +262,6 @@ export const RuleDatabase: React.FC = () => {
       {/* KPI Overview Cards */}
       {statistics && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-sm">
           <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-500">Total Rules</span>
@@ -385,7 +271,6 @@ export const RuleDatabase: React.FC = () => {
             <span className="text-[10px] text-slate-400">Baseline v0.1 &bull; 100% Ingested</span>
           </div>
 
-          <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-sm">
           <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-500">Active In Engine</span>
@@ -395,7 +280,6 @@ export const RuleDatabase: React.FC = () => {
             <span className="text-[10px] text-emerald-600 font-medium">Currently Governing</span>
           </div>
 
-          <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-sm">
           <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-500">Review Required</span>
@@ -405,7 +289,6 @@ export const RuleDatabase: React.FC = () => {
             <span className="text-[10px] text-amber-600 font-medium">Statutory Official Review</span>
           </div>
 
-          <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-sm">
           <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-500">Future Rules</span>
@@ -415,7 +298,6 @@ export const RuleDatabase: React.FC = () => {
             <span className="text-[10px] text-purple-600 font-medium">2027 Amendment Inactive</span>
           </div>
 
-          <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-sm">
           <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-500">Historical Guards</span>
@@ -480,21 +362,15 @@ export const RuleDatabase: React.FC = () => {
       {/* Rules Table */}
       <Card>
         <CardHeader
-          title="Codified LMPC Rule Records"
-          subtitle="Governing deterministic compliance evaluation during package inspections"
           title="Authoritative LMPC Rules (v1.0)"
           subtitle={`Showing ${filteredRules.length} of ${rules.length} statutory rule records`}
           action={
-            <Button variant="outline" size="sm" icon={<History className="w-3.5 h-3.5" />}>
-              Audit Version History
-            </Button>
             <span className="text-xs text-slate-500 font-mono">
               Database: SIH26034_LMPC_Rule_Database v1.0
             </span>
           }
         />
         <CardContent className="p-0">
-          <Table columns={columns} data={rules} keyExtractor={(row) => row.id} />
           {loading ? (
             <div className="p-12 text-center text-xs text-slate-500">
               <RefreshCw className="w-5 h-5 text-blue-600 animate-spin mx-auto mb-2" />
@@ -646,4 +522,3 @@ export const RuleDatabase: React.FC = () => {
     </div>
   );
 };
-

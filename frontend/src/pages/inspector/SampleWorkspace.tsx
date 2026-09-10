@@ -1083,11 +1083,6 @@ export const SampleWorkspace: React.FC = () => {
               subtitle="Statutory compliance & verification"
             />
             <CardContent className="space-y-3 text-xs">
-              {/* Phase 11 Rule Engine Placeholder */}
-              <div className="p-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 space-y-1.5">
-                <div className="flex items-center space-x-2 text-slate-500 font-bold">
-                  <Sparkles className="w-4 h-4 text-slate-400" />
-                  <span>Phase 11: LMPC Rule Engine</span>
               {/* Phase 11 Deterministic Rule Engine Active */}
               <div className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/60 space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -1099,16 +1094,11 @@ export const SampleWorkspace: React.FC = () => {
                     Active v1.0
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Deterministic evaluation against Legal Metrology Rules 2011 to generate candidate compliance findings.
                 <p className="text-[11px] text-emerald-950 leading-relaxed">
                   {ruleEvaluation
                     ? `${ruleEvaluation.summary.applicable_count} statutory rules applicable; ${ruleEvaluation.summary.review_required_count} review required.`
                     : 'Deterministic Rule Engine v1.0 ready for evaluation.'}
                 </p>
-                <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-600">
-                  Pending Phase 11
-                </span>
               </div>
 
               {/* Phase 12 Compliance Findings Placeholder */}
