@@ -21,6 +21,7 @@ router.get('/', RuleController.listRules);
  * @access  Private (Inspectors and Assistant Controllers)
  */
 router.get('/summary/statistics', RuleController.getStatistics);
+router.get('/statistics', RuleController.getStatistics);
 
 /**
  * @route   GET /api/rules/validation/consistency

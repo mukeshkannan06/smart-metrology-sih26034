@@ -143,7 +143,8 @@ export class RuleController {
   public static async updateRuleStatus(req: Request, res: Response): Promise<void> {
     try {
       const ruleId = String(req.params.ruleId || '');
-      const { status, notes } = req.body;
+      const status = req.body.status || req.body.rule_status;
+      const notes = req.body.notes;
 
       if (!status || !Object.values(RuleOperationalStatus).includes(status)) {
         res.status(400).json({
@@ -153,7 +154,7 @@ export class RuleController {
         return;
       }
 
-      const updateFields: Record<string, unknown> = { rule_status: status };
+      const updateFields: Record<string, unknown> = { rule_status: status, status: status };
       if (notes !== undefined) updateFields.notes = notes;
 
       const rule = await Rule.findOneAndUpdate(
