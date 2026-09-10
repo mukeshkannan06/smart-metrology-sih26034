@@ -2,6 +2,12 @@ import React, { useState } from 'react';
 import { BookOpen, Search, Filter, ShieldCheck, Scale } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Search, Filter, ShieldCheck, Scale, ExternalLink, RefreshCw, AlertTriangle } from 'lucide-react';
+import {
+  Search,
+  ExternalLink,
+  RefreshCw,
+  AlertTriangle,
+} from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card, CardHeader, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
@@ -73,6 +79,20 @@ export const RuleReference: React.FC = () => {
       source: 'LMPC Amendment Rules, 2017 & 2021',
     },
   ];
+  const loadRules = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await fetchRules();
+      setRules(data);
+    } catch (err: unknown) {
+      console.error('Failed to load rules:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load rules');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     async function loadRules() {
       try {

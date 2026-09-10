@@ -19,6 +19,7 @@ import {
   ToggleLeft,
   ToggleRight,
   Info,
+  FileText,
 } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card, CardHeader, CardContent } from '../../components/ui/Card';
@@ -186,15 +187,40 @@ export const RuleDatabase: React.FC = () => {
     switch (status) {
       case 'MANDATORY':
         return <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">Mandatory</span>;
+        return (
+          <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
+            Mandatory
+          </span>
+        );
       case 'CONDITIONAL':
         return <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">Conditional</span>;
+        return (
+          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+            Conditional
+          </span>
+        );
       case 'NOT_APPLICABLE':
         return <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">Not Applicable</span>;
+        return (
+          <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">
+            Not Applicable
+          </span>
+        );
       case 'OPTIONAL':
         return <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">Optional</span>;
+        return (
+          <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+            Optional
+          </span>
+        );
       case 'REQUIRES_INSPECTOR_REVIEW':
       default:
         return <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded">Official Review</span>;
+        return (
+          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded">
+            Official Review
+          </span>
+        );
     }
   };
 
@@ -235,12 +261,17 @@ export const RuleDatabase: React.FC = () => {
             {row.requirement_description}
           </div>
           <div className="flex items-center gap-1.5 mt-1">
+          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
             <span className="font-mono text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
               {row.package_context}
             </span>
             {getMandatoryBadge(row.mandatory_status)}
             {row.inspector_review_required && (
               <span className="text-[10px] text-amber-700 bg-amber-50 px-1 rounded flex items-center gap-0.5" title="Requires Legal Metrology Inspector Review">
+              <span
+                className="text-[10px] text-amber-700 bg-amber-50 px-1 rounded flex items-center gap-0.5"
+                title="Requires Legal Metrology Inspector Review"
+              >
                 <AlertTriangle className="w-2.5 h-2.5 inline" /> Review Required
               </span>
             )}
@@ -345,6 +376,7 @@ export const RuleDatabase: React.FC = () => {
       {statistics && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-sm">
+          <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-500">Total Rules</span>
               <Database className="w-4 h-4 text-blue-600" />
@@ -354,6 +386,7 @@ export const RuleDatabase: React.FC = () => {
           </div>
 
           <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-sm">
+          <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-500">Active In Engine</span>
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -363,6 +396,7 @@ export const RuleDatabase: React.FC = () => {
           </div>
 
           <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-sm">
+          <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-500">Review Required</span>
               <AlertTriangle className="w-4 h-4 text-amber-600" />
@@ -372,6 +406,7 @@ export const RuleDatabase: React.FC = () => {
           </div>
 
           <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-sm">
+          <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-500">Future Rules</span>
               <Clock className="w-4 h-4 text-purple-600" />
@@ -381,6 +416,7 @@ export const RuleDatabase: React.FC = () => {
           </div>
 
           <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-sm">
+          <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-500">Historical Guards</span>
               <ShieldCheck className="w-4 h-4 text-indigo-600" />
