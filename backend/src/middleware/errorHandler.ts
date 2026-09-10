@@ -18,6 +18,17 @@ export const errorHandler = (
     return;
   }
 
+  // Handle Express body-parser payload too large error (413)
+  if (('type' in err && err.type === 'entity.too.large') || ('status' in err && err.status === 413)) {
+    res.status(413).json({
+      success: false,
+      error: 'Payload Too Large',
+      message: 'The uploaded image payload exceeds the allowed upload limit of 15 MB.',
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+
   // Handle explicit status or default to 500 Internal Server Error
   const statusCode = ('status' in err && typeof err.status === 'number') ? err.status : 500;
   const isDev = config.isDevelopment;

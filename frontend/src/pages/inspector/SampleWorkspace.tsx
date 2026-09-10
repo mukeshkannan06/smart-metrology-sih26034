@@ -720,12 +720,33 @@ export const SampleWorkspace: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
+                  {/* Mode Banner: Mock vs Live Gemini */}
+                  {aiExtraction.provider.includes('mock') ? (
+                    <div className="p-3 bg-amber-50/90 border border-amber-300 rounded-xl text-amber-950 flex items-start space-x-2.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-[11px] leading-relaxed">
+                        <span className="font-bold text-amber-900">Demo Simulation Mode Active:</span>{' '}
+                        No <code className="bg-amber-100 px-1 py-0.5 rounded text-amber-900 font-bold">GEMINI_API_KEY</code> is configured in <code className="bg-amber-100 px-1 py-0.5 rounded text-amber-900 font-bold">backend/.env</code>. The extracted declarations below are simulated sample data.
+                        <div className="mt-1 font-medium text-amber-800">
+                          💡 To extract the actual printed text from your uploaded package photo: Add your Google Gemini API key in <code className="bg-white/90 px-1 py-0.5 rounded border border-amber-200">backend/.env</code> as <code className="bg-white/90 px-1 py-0.5 rounded border border-amber-200">GEMINI_API_KEY=your_key</code> and click <em>Re-analyze Package</em>.
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-2.5 bg-emerald-50/80 border border-emerald-200 rounded-xl text-emerald-950 flex items-center space-x-2 text-[11px]">
+                      <Sparkles className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      <span>
+                        <strong>Live Gemini Vision Active:</strong> Observable declarations extracted directly from your uploaded package photos using Google Gemini ({aiExtraction.aiModel || 'Multimodal AI'}).
+                      </span>
+                    </div>
+                  )}
+
                   {/* Extraction Telemetry Summary Header */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px]">
                     <div>
-                      <span className="text-slate-400 block text-[10px]">AI Provider / Model</span>
+                      <span className="text-slate-400 block text-[10px]">AI Engine</span>
                       <span className="font-semibold text-slate-800 truncate block">
-                        {aiExtraction.provider} ({aiExtraction.aiModel})
+                        {aiExtraction.provider.includes('mock') ? 'Demo Mock Provider' : 'Gemini 1.5 Flash'}
                       </span>
                     </div>
                     <div>
@@ -743,47 +764,64 @@ export const SampleWorkspace: React.FC = () => {
                     <div>
                       <span className="text-slate-400 block text-[10px]">Photos Analyzed</span>
                       <span className="font-semibold text-slate-800">
-                        {aiExtraction.processingMetadata.imagesCount} Photos
+                        {aiExtraction.processingMetadata.imagesCount} Photo{aiExtraction.processingMetadata.imagesCount !== 1 ? 's' : ''}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[10px]">Inspector Verified</span>
+                      <span className="text-slate-400 block text-[10px]">Declarations Found</span>
                       <span className="font-semibold text-slate-800">
-                        {aiExtraction.declarations.filter((d) => d.inspectorReview?.status === 'CONFIRMED').length} / {aiExtraction.declarations.length}
+                        {aiExtraction.declarations.filter((d) => d.state === 'DETECTED').length} of {aiExtraction.declarations.length} Detected
                       </span>
                     </div>
                   </div>
 
-                  {/* Declarations List / Table */}
+                  {/* Clean Declarations List */}
                   <div className="space-y-2">
                     {aiExtraction.declarations.map((decl) => {
                       const meta = CATEGORY_META[decl.category] || { label: decl.category, statutoryHint: '', ruleRefHint: '' };
-                      const isConfirmed = decl.inspectorReview?.status === 'CONFIRMED';
-                      const isIncorrect = decl.inspectorReview?.status === 'INCORRECT';
-                      const isUnclear = decl.inspectorReview?.status === 'UNCLEAR';
-                      const isReviewing = reviewingCategory === decl.category;
+                      const isDetected = decl.state === 'DETECTED';
 
                       return (
                         <div
                           key={decl.category}
-                          className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-colors space-y-2"
+                          className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-colors shadow-2xs"
                         >
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            {/* Category Title & Legal Ref */}
-                            <div className="flex items-center space-x-2">
-                              <span className="font-bold text-slate-800 text-xs">{meta.label}</span>
-                              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-mono font-medium">
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                            {/* Left: Category Title & Statutory Reference */}
+                            <div className="sm:w-52 flex-shrink-0">
+                              <span className="font-bold text-slate-800 text-xs block">{meta.label}</span>
+                              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-mono inline-block mt-0.5">
                                 {meta.ruleRefHint}
                               </span>
                             </div>
 
-                            {/* Badges: State + Confidence */}
-                            <div className="flex items-center space-x-2 flex-wrap">
+                            {/* Middle: Extracted Text Display */}
+                            <div className="flex-1 bg-slate-50/70 p-2.5 rounded-lg border border-slate-100 min-w-0">
+                              {decl.rawValue ? (
+                                <div>
+                                  <div className="font-mono text-xs text-slate-900 font-bold break-words">
+                                    {decl.rawValue}
+                                  </div>
+                                  {decl.normalizedValue && decl.normalizedValue !== decl.rawValue && (
+                                    <div className="text-[11px] text-slate-500 mt-1">
+                                      <span className="font-semibold text-slate-600">Standardized:</span> {decl.normalizedValue}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-slate-400 italic">
+                                  Not detected on visible package surfaces
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Right: Detection Status Badge & Visual Evidence Photo Link */}
+                            <div className="sm:w-36 flex-shrink-0 flex sm:flex-col items-end sm:items-end justify-between gap-1.5">
                               <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                decl.state === 'DETECTED'
+                                isDetected
                                   ? 'bg-emerald-100 text-emerald-800'
                                   : decl.state === 'NOT_DETECTED'
-                                  ? 'bg-slate-100 text-slate-600'
+                                  ? 'bg-slate-100 text-slate-500'
                                   : decl.state === 'LOW_CONFIDENCE'
                                   ? 'bg-amber-100 text-amber-800'
                                   : 'bg-orange-100 text-orange-800'
@@ -791,136 +829,30 @@ export const SampleWorkspace: React.FC = () => {
                                 {decl.state.replace('_', ' ')}
                               </span>
 
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                                decl.confidence === 'HIGH'
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : decl.confidence === 'MEDIUM'
-                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                  : 'bg-orange-50 text-orange-700 border border-orange-200'
-                              }`}>
-                                {decl.confidence} Conf.
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Values & Evidence Location */}
-                          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-1">
-                            {/* Extracted Raw & Normalized Text */}
-                            <div className="md:col-span-7 bg-slate-50/70 p-2.5 rounded-lg border border-slate-100 space-y-1">
-                              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                Extracted Text
-                              </div>
-                              {decl.rawValue ? (
-                                <div>
-                                  <div className="font-mono text-xs text-slate-900 font-semibold break-words">
-                                    {decl.rawValue}
-                                  </div>
-                                  {decl.normalizedValue && decl.normalizedValue !== decl.rawValue && (
-                                    <div className="text-[11px] text-slate-500 mt-1">
-                                      <span className="font-semibold text-slate-600">Normalized:</span> {decl.normalizedValue}
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-[11px] text-slate-400 italic">No declaration text detected</span>
+                              {decl.evidenceImageSequence && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const foundImg = currentSample?.images?.find(
+                                      (i) => i.imageId === decl.evidenceImageId || i.sequence === decl.evidenceImageSequence
+                                    ) || currentSample?.images?.[0];
+                                    if (foundImg) {
+                                      setSelectedImageForView(foundImg);
+                                    }
+                                  }}
+                                  className="text-blue-600 hover:text-blue-800 font-semibold text-[10px] inline-flex items-center space-x-1 cursor-pointer pt-0.5"
+                                  title="View photo where this declaration was observed"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>Photo #{decl.evidenceImageSequence}</span>
+                                </button>
                               )}
-                            </div>
 
-                            {/* Evidence Citation & Link */}
-                            <div className="md:col-span-5 bg-slate-50/70 p-2.5 rounded-lg border border-slate-100 space-y-1">
-                              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
-                                <span>Visual Evidence</span>
-                                {decl.evidenceImageSequence && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const foundImg = currentSample?.images?.find(
-                                        (i) => i.imageId === decl.evidenceImageId || i.sequence === decl.evidenceImageSequence
-                                      ) || currentSample?.images?.[0];
-                                      if (foundImg) {
-                                        setSelectedImageForView(foundImg);
-                                      }
-                                    }}
-                                    className="text-blue-600 hover:text-blue-800 font-bold inline-flex items-center space-x-1 cursor-pointer"
-                                  >
-                                    <Eye className="w-3 h-3" />
-                                    <span>Photo #{decl.evidenceImageSequence}</span>
-                                  </button>
-                                )}
-                              </div>
-                              <p className="text-[11px] text-slate-600 italic leading-snug">
-                                {decl.evidenceDescription || 'No specific location specified.'}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Inspector Verification Bar */}
-                          <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]">
-                            <div className="flex items-center space-x-2">
-                              <span className="text-slate-500 font-medium">Inspector Review:</span>
-                              <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
-                                isConfirmed
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : isIncorrect
-                                  ? 'bg-rose-100 text-rose-800'
-                                  : isUnclear
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-slate-100 text-slate-600'
-                              }`}>
-                                {decl.inspectorReview?.status || 'PENDING'}
-                              </span>
-                              {decl.inspectorReview?.reviewedBy && (
-                                <span className="text-[10px] text-slate-400">
-                                  by {decl.inspectorReview.reviewedBy}
+                              {decl.evidenceDescription && (
+                                <span className="text-[10px] text-slate-400 text-right truncate max-w-[140px] block" title={decl.evidenceDescription}>
+                                  {decl.evidenceDescription}
                                 </span>
                               )}
-                            </div>
-
-                            {/* Action Buttons */}
-                            <div className="flex items-center space-x-1">
-                              <button
-                                type="button"
-                                disabled={isReviewing}
-                                onClick={() => handleReview(decl.category, 'CONFIRMED')}
-                                title="Confirm extraction is correct"
-                                className={`px-2 py-1 rounded text-[11px] font-medium transition-colors flex items-center space-x-1 cursor-pointer ${
-                                  isConfirmed
-                                    ? 'bg-emerald-600 text-white shadow-xs'
-                                    : 'bg-slate-100 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700'
-                                }`}
-                              >
-                                <Check className="w-3 h-3" />
-                                <span>Confirm</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                disabled={isReviewing}
-                                onClick={() => handleReview(decl.category, 'INCORRECT')}
-                                title="Flag extraction as incorrect"
-                                className={`px-2 py-1 rounded text-[11px] font-medium transition-colors flex items-center space-x-1 cursor-pointer ${
-                                  isIncorrect
-                                    ? 'bg-rose-600 text-white shadow-xs'
-                                    : 'bg-slate-100 text-slate-700 hover:bg-rose-50 hover:text-rose-700'
-                                }`}
-                              >
-                                <X className="w-3 h-3" />
-                                <span>Flag Incorrect</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                disabled={isReviewing}
-                                onClick={() => handleReview(decl.category, 'UNCLEAR')}
-                                title="Flag extraction as unclear or blurry"
-                                className={`px-2 py-1 rounded text-[11px] font-medium transition-colors flex items-center space-x-1 cursor-pointer ${
-                                  isUnclear
-                                    ? 'bg-amber-600 text-white shadow-xs'
-                                    : 'bg-slate-100 text-slate-700 hover:bg-amber-50 hover:text-amber-700'
-                                }`}
-                              >
-                                <span>Flag Unclear</span>
-                              </button>
                             </div>
                           </div>
                         </div>

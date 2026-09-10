@@ -207,10 +207,10 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
       return;
     }
 
-    const maxBytes = 5 * 1024 * 1024;
+    const maxBytes = 15 * 1024 * 1024;
     if (file.size > maxBytes) {
       setSubmissionError(
-        `File size (${(file.size / (1024 * 1024)).toFixed(2)} MB) exceeds the maximum allowed limit of 5.00 MB.`
+        `File size (${(file.size / (1024 * 1024)).toFixed(2)} MB) exceeds the maximum allowed limit of 15.00 MB.`
       );
       return;
     }
@@ -523,7 +523,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
                   Select or drag package photograph
                 </h3>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                  Click to choose a photo from your computer or phone gallery. Supported formats: JPEG, PNG, WEBP (Max 5.00 MB).
+                  Click to choose a photo from your computer or phone gallery. Supported formats: JPEG, PNG, WEBP (Max 15.00 MB).
                 </p>
                 <div className="mt-4">
                   <span className="inline-block px-4 py-1.5 rounded-lg bg-blue-600 text-white font-bold text-xs shadow-xs hover:bg-blue-700">

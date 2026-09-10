@@ -17,7 +17,7 @@ export const ALLOWED_MIME_TYPES = [
   'image/webp',
 ];
 
-export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+export const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
 
 export interface SavedImageResult {
   imageId: string;
@@ -156,7 +156,7 @@ export function parseImagePayload(
 
   if (buffer.length > MAX_FILE_SIZE_BYTES) {
     throw new Error(
-      `Image file size (${(buffer.length / (1024 * 1024)).toFixed(2)} MB) exceeds the maximum allowed limit of 5.00 MB.`
+      `Image file size (${(buffer.length / (1024 * 1024)).toFixed(2)} MB) exceeds the maximum allowed limit of 15.00 MB.`
     );
   }
 

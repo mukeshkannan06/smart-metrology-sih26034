@@ -32,11 +32,9 @@ export const createApp = (): Express => {
   // 3. Request Logging
   app.use(requestLogger);
 
-  // 4. Body and Cookie Parsers
-  app.use(express.json({ limit: '2mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '2mb' }));
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  // 4. Body and Cookie Parsers (Support high-resolution packaging image uploads up to 25MB)
+  app.use(express.json({ limit: '25mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '25mb' }));
   app.use(cookieParser());
 
   // 5. API Routes (/api/...)

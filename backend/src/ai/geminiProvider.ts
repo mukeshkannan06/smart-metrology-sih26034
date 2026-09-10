@@ -1,3 +1,5 @@
+import path from 'path';
+import dotenv from 'dotenv';
 import {
   AIProvider,
   PackageAnalysisRequest,
@@ -57,16 +59,28 @@ Return STRICT JSON ONLY matching the following schema with NO markdown wrapping,
 
 export class GeminiProvider implements AIProvider {
   public readonly name = 'gemini';
-  private readonly apiKey: string | undefined;
-  private readonly modelName: string;
 
-  constructor() {
-    this.apiKey = process.env.GEMINI_API_KEY?.trim();
-    this.modelName = process.env.GEMINI_MODEL?.trim() || 'gemini-1.5-flash';
+  private reloadEnv(): void {
+    try {
+      dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: true });
+    } catch {
+      // ignore
+    }
+  }
+
+  private get apiKey(): string | undefined {
+    this.reloadEnv();
+    return process.env.GEMINI_API_KEY?.trim();
+  }
+
+  private get modelName(): string {
+    this.reloadEnv();
+    return process.env.GEMINI_MODEL?.trim() || 'gemini-3.6-flash';
   }
 
   public isLiveApiAvailable(): boolean {
-    return Boolean(this.apiKey && this.apiKey.length > 5 && this.apiKey !== 'mock');
+    const key = this.apiKey;
+    return Boolean(key && key.length > 5 && key !== 'mock');
   }
 
   public async analyzePackageImages(
@@ -80,24 +94,41 @@ export class GeminiProvider implements AIProvider {
 
     // Check if live API key is available or if mock mode is requested
     if (!this.isLiveApiAvailable() || process.env.FORCE_MOCK_AI === 'true') {
+      console.log('[GEMINI_PROVIDER] No live API key found or mock forced. Using mock extraction.');
       return this.generateMockAnalysis(request, startTime);
     }
 
-    try {
-      return await this.callGeminiMultimodal(request, startTime);
-    } catch (apiError: any) {
-      // If live call fails (quota 429, timeout, network), handle gracefully
-      const safeMessage = this.sanitizeErrorMessage(apiError.message || 'Gemini API call failed');
-      
-      // If in development/testing, fall back to deterministic mock with explicit warning
-      if (process.env.NODE_ENV !== 'production') {
-        const mockFallback = this.generateMockAnalysis(request, startTime);
-        mockFallback.warnings.push(`Live Gemini API notice (${safeMessage}). Switched to assistive fallback extraction.`);
-        return mockFallback;
-      }
+    const primary = this.modelName;
+    const candidates = Array.from(new Set([primary, 'gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-3.6-flash']));
 
-      throw new Error(`AI Extraction Service unavailable: ${safeMessage}`);
+    let lastError: any;
+    for (const targetModel of candidates) {
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          console.log(`[GEMINI_PROVIDER] Calling live Gemini Multimodal API (${targetModel}) with ${request.images.length} image(s) [Attempt ${attempt}]...`);
+          const response = await this.callGeminiMultimodal(request, startTime, targetModel);
+          console.log(`[GEMINI_PROVIDER] Live Gemini extraction succeeded with ${targetModel} in ${Date.now() - startTime}ms.`);
+          return response;
+        } catch (apiError: any) {
+          lastError = apiError;
+          const safeMessage = this.sanitizeErrorMessage(apiError.message || 'Gemini API call failed');
+          console.warn(`[GEMINI_PROVIDER] Model ${targetModel} attempt ${attempt} failed: ${safeMessage}`);
+          
+          // If model is overloaded (503) or rate-limited (429), failover immediately to next model
+          if (apiError.status === 503 || apiError.status === 429 || safeMessage.includes('503') || safeMessage.includes('demand')) {
+            console.log(`[GEMINI_PROVIDER] ${targetModel} is busy or high demand. Failing over to next model...`);
+            break;
+          }
+          if (attempt < 2) {
+            await new Promise((r) => setTimeout(r, 1000));
+          }
+        }
+      }
     }
+
+    const safeMessage = this.sanitizeErrorMessage(lastError?.message || 'Gemini API call failed');
+    console.error('[GEMINI_PROVIDER] Live Gemini API failed across all fallback models:', safeMessage);
+    throw new Error(`Live Gemini Vision extraction failed (${safeMessage}). Please click "Re-analyze Package" to retry.`);
   }
 
   /**
@@ -105,10 +136,11 @@ export class GeminiProvider implements AIProvider {
    */
   private async callGeminiMultimodal(
     request: PackageAnalysisRequest,
-    startTime: number
+    startTime: number,
+    activeModel: string
   ): Promise<PackageAnalysisResponse> {
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-      this.modelName
+      activeModel
     )}:generateContent?key=${encodeURIComponent(this.apiKey!)}`;
 
     // Build multimodal payload with all sample photos
@@ -152,9 +184,9 @@ Extract all 10 statutory declaration categories strictly observing visible text.
       },
     };
 
-    // 35-second network timeout
+    // 90-second network timeout for high-resolution multimodal vision analysis
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 35000);
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
 
     let res: Response;
     try {
@@ -169,7 +201,7 @@ Extract all 10 statutory declaration categories strictly observing visible text.
     } catch (netErr: any) {
       clearTimeout(timeoutId);
       if (netErr.name === 'AbortError') {
-        throw new Error('Gemini API call timed out after 35 seconds. Please retry.');
+        throw new Error('Gemini API call timed out after 90 seconds. Please retry.');
       }
       throw netErr;
     } finally {
@@ -184,13 +216,9 @@ Extract all 10 statutory declaration categories strictly observing visible text.
         // ignore
       }
 
-      if (res.status === 429) {
-        throw new Error('Gemini API quota exceeded or rate limit reached. Please wait a moment before re-analyzing.');
-      }
-      if (res.status === 400 || res.status === 403) {
-        throw new Error(`Gemini API authorization error (${res.status}). Verify GEMINI_API_KEY configuration.`);
-      }
-      throw new Error(`Gemini API returned status ${res.status}: ${errBody.slice(0, 200)}`);
+      const err: any = new Error(`Gemini API returned status ${res.status}: ${errBody.slice(0, 200)}`);
+      err.status = res.status;
+      throw err;
     }
 
     const data: any = await res.json();
@@ -203,7 +231,7 @@ Extract all 10 statutory declaration categories strictly observing visible text.
       throw new Error('Gemini API returned an empty extraction response.');
     }
 
-    return this.parseAndNormalizeGeminiResponse(rawText, request, durationMs);
+    return this.parseAndNormalizeGeminiResponse(rawText, request, durationMs, activeModel);
   }
 
   /**
@@ -212,7 +240,8 @@ Extract all 10 statutory declaration categories strictly observing visible text.
   private parseAndNormalizeGeminiResponse(
     rawText: string,
     request: PackageAnalysisRequest,
-    durationMs: number
+    durationMs: number,
+    activeModel: string
   ): PackageAnalysisResponse {
     let parsed: any;
     try {
@@ -272,7 +301,7 @@ Extract all 10 statutory declaration categories strictly observing visible text.
 
     return {
       provider: this.name,
-      model: this.modelName,
+      model: activeModel,
       promptVersion: PROMPT_VERSION,
       overallConfidence: this.sanitizeConfidence(parsed.overallConfidence),
       declarations: normalizedDeclarations,
