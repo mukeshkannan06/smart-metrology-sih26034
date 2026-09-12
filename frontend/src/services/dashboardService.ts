@@ -1,3 +1,5 @@
+import { getApiUrl, getAuthHeaders } from './apiConfig';
+
 export interface InspectorDashboardData {
   officer: {
     name: string;
@@ -100,9 +102,9 @@ export async function fetchInspectorDashboard(forceRefresh: boolean = false): Pr
     }
   }
 
-  const response = await fetch('/api/dashboard/inspector', {
+  const response = await fetch(getApiUrl('/api/dashboard/inspector'), {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     credentials: 'include',
   });
 
@@ -135,9 +137,9 @@ export async function fetchControllerDashboard(forceRefresh: boolean = false): P
     }
   }
 
-  const response = await fetch('/api/dashboard/controller', {
+  const response = await fetch(getApiUrl('/api/dashboard/controller'), {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     credentials: 'include',
   });
 

@@ -10,31 +10,42 @@ The application is an **assistive inspection system** designed to assist Inspect
 
 ## 📍 Current Development Status
 
-* **Current Phase**: **Phase 6 — Inspector & Assistant Controller Dashboards**
-* **Status**: **Phase 6 Complete — Awaiting Human Approval for Phase 7**
-* **Completed Phases**:
+* **Current Phase**: **Phase 17 — Production Build & Deployment Preparation**
+* **Status**: **Phase 17 Complete & Validated — Deployment Ready for Phase 18**
+* **Completed & Approved Phases**:
   * Phase 1: Project Foundation & Repository Structure (Approved)
   * Phase 2: Frontend Application Shell & Base44-style UI (Approved)
   * Phase 3: Backend Express Foundation (Approved)
   * Phase 4: MongoDB Atlas & Database Foundation (Approved)
   * Phase 5: Authentication & Role-Based Authorization (Approved)
-  * Phase 6: Inspector & Assistant Controller Dashboards (Implemented & Verified)
-* **Future Phases**: New Inspection Workflow (Phase 7), Multi-Sample Flow (Phase 8), Camera & Images (Phase 9), AI/OCR (Phase 10), Rule Engine (Phase 11). Not yet implemented. Strictly developed phase-by-phase.
+  * Phase 6: Inspector & Assistant Controller Dashboards (Approved)
+  * Phase 7: New Inspection Workflow & Package Context (Approved)
+  * Phase 8: Multi-Sample Inspection (Approved)
+  * Phase 9: Camera Capture & Temporary Image Handling (Approved)
+  * Phase 10: Gemini Multimodal AI/OCR Integration (Approved)
+  * Phase 11: Legal Metrology 33-Rule Database & Deterministic Rule Engine (Approved)
+  * Phase 12: Compliance Findings & Inspector Verification (Approved)
+  * Phase 13: Inspection History, Evidence & Audit (Approved)
+  * Phase 14: Consolidated PDF Reporting (Approved)
+  * Phase 15: Assistant Controller Analytics & Monitoring (Approved)
+  * Phase 16: Integration, Security & Validation (Approved)
+  * Phase 17: Production Build & Deployment Preparation (Completed & Validated)
 
+> 📖 **Deployment Guide**: Complete step-by-step instructions for deploying to Vercel and Render in Phase 18 are documented in [`docs/DEPLOYMENT_PREPARATION.md`](docs/DEPLOYMENT_PREPARATION.md).
 > 🔑 **Demo Credentials**: For demonstration account logins (`inspector1`, `inspector2`, `controller`), see [`docs/demo-credentials.md`](docs/demo-credentials.md).
 
 ---
 
 ## 🛠️ Technology Stack (Established Architecture)
 
-* **Frontend**: React (v18), Vite, TypeScript, Tailwind CSS, Lucide React
-* **Backend**: Node.js, Express.js, TypeScript
-* **Database**: MongoDB Atlas (Free M0 tier - *Phase 4*)
-* **AI/OCR**: Google Gemini API Multimodal Vision (*Phase 10*)
-* **Charts**: Recharts (*Phase 15*)
-* **Reporting**: jsPDF (*Phase 14*)
-* **Deployment**: Frontend on Vercel, Backend on Render
-* **Source Control**: Git & GitHub
+* **Frontend**: React (v18), Vite, TypeScript, Tailwind CSS, Lucide React (Deployed to **Vercel** in Phase 18)
+* **Backend**: Node.js, Express.js, TypeScript (Deployed to **Render** in Phase 18)
+* **Database**: MongoDB Atlas M0 Multi-Region Cluster
+* **AI/OCR**: Google Gemini API Multimodal Vision (`gemini-2.5-flash`, server-side only)
+* **Rule Engine**: Deterministic condition evaluation engine (33 statutory rules, 0% `eval()`)
+* **Charts**: Recharts
+* **Reporting**: jsPDF (Deterministic multi-sample consolidated synthesis)
+* **Source Control**: Git & GitHub (Manually controlled by user)
 
 ### 🚫 Prohibited Technologies
 * **No Railway** (Strictly Render for backend)

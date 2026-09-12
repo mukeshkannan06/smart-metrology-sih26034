@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types/navigation';
+import { getApiUrl, getAuthHeaders, saveAuthToken, clearAuthToken } from '../services/apiConfig';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -55,9 +56,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        const response = await fetch('/api/auth/me', {
+        const response = await fetch(getApiUrl('/api/auth/me'), {
           method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           credentials: 'include',
         });
 
@@ -66,13 +67,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (data.success && data.user) {
             setUser(formatUserProfile(data.user));
           } else {
+            clearAuthToken();
             setUser(null);
           }
         } else {
+          clearAuthToken();
           setUser(null);
         }
       } catch (err) {
         console.error('[AUTH_CONTEXT] Error checking auth status:', err);
+        clearAuthToken();
         setUser(null);
       } finally {
         setIsLoading(false);
@@ -84,9 +88,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (username: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(getApiUrl('/api/auth/login'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         credentials: 'include',
         body: JSON.stringify({ username, password }),
       });
@@ -94,6 +98,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await response.json();
 
       if (response.ok && data.success && data.user) {
+        if (data.token) {
+          saveAuthToken(data.token);
+        }
         const profile = formatUserProfile(data.user);
         setUser(profile);
         return { success: true };
@@ -114,13 +121,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async (): Promise<void> => {
     try {
-      await fetch('/api/auth/logout', {
+      await fetch(getApiUrl('/api/auth/logout'), {
         method: 'POST',
+        headers: getAuthHeaders(),
         credentials: 'include',
       });
     } catch (err) {
       console.error('[AUTH_CONTEXT] Logout error:', err);
     } finally {
+      clearAuthToken();
       setUser(null);
     }
   };

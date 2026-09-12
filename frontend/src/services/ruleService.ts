@@ -1,3 +1,5 @@
+import { getApiUrl, getAuthHeaders } from './apiConfig';
+
 export interface RuleItem {
   _id: string;
   rule_id: string;
@@ -130,9 +132,9 @@ export async function fetchRules(
   if (filters?.search) params.append('search', filters.search);
 
   const queryStr = params.toString() ? `?${params.toString()}` : '';
-  const response = await fetch(`/api/rules${queryStr}`, {
+  const response = await fetch(getApiUrl(`/api/rules${queryStr}`), {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     credentials: 'include',
   });
 
@@ -156,9 +158,9 @@ export async function fetchRuleStatistics(forceRefresh: boolean = false): Promis
     }
   }
 
-  const response = await fetch('/api/rules/summary/statistics', {
+  const response = await fetch(getApiUrl('/api/rules/summary/statistics'), {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     credentials: 'include',
   });
 
@@ -173,9 +175,9 @@ export async function fetchRuleStatistics(forceRefresh: boolean = false): Promis
 }
 
 export async function fetchRuleById(ruleId: string): Promise<RuleItem> {
-  const response = await fetch(`/api/rules/${ruleId}`, {
+  const response = await fetch(getApiUrl(`/api/rules/${ruleId}`), {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     credentials: 'include',
   });
 
@@ -193,9 +195,9 @@ export async function updateRuleStatus(
   status: string,
   notes?: string
 ): Promise<RuleItem> {
-  const response = await fetch(`/api/rules/${ruleId}/status`, {
+  const response = await fetch(getApiUrl(`/api/rules/${ruleId}/status`), {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     credentials: 'include',
     body: JSON.stringify({ status, notes }),
   });
@@ -211,9 +213,9 @@ export async function updateRuleStatus(
 }
 
 export async function evaluateSampleRules(sampleId: string): Promise<RuleEvaluationData> {
-  const response = await fetch(`/api/rule-engine/evaluate/${sampleId}`, {
+  const response = await fetch(getApiUrl(`/api/rule-engine/evaluate/${sampleId}`), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     credentials: 'include',
   });
 
@@ -230,9 +232,9 @@ export async function fetchSampleEvaluations(sampleId: string): Promise<{
   latestEvaluation: RuleEvaluationData | null;
   evaluations: RuleEvaluationData[];
 }> {
-  const response = await fetch(`/api/rule-engine/samples/${sampleId}/evaluations`, {
+  const response = await fetch(getApiUrl(`/api/rule-engine/samples/${sampleId}/evaluations`), {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     credentials: 'include',
   });
 

@@ -1,3 +1,5 @@
+import { getApiUrl, getAuthHeaders } from './apiConfig';
+
 export interface HistoryFilterOptions {
   search?: string;
   status?: string;
@@ -200,10 +202,10 @@ export async function fetchInspectionHistory(
   if (options.page) query.append('page', String(options.page));
   if (options.limit) query.append('limit', String(options.limit));
 
-  const url = `/api/history/inspections${query.toString() ? `?${query.toString()}` : ''}`;
+  const url = getApiUrl(`/api/history/inspections${query.toString() ? `?${query.toString()}` : ''}`);
   const response = await fetch(url, {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     credentials: 'include',
   });
 
@@ -241,9 +243,9 @@ export async function fetchInspectionHistory(
 export async function fetchHistoricalInspectionDetail(
   id: string
 ): Promise<HistoricalInspectionDetail> {
-  const response = await fetch(`/api/history/inspections/${encodeURIComponent(id)}`, {
+  const response = await fetch(getApiUrl(`/api/history/inspections/${encodeURIComponent(id)}`), {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     credentials: 'include',
   });
 

@@ -1,3 +1,5 @@
+import { getApiUrl, getAuthHeaders } from './apiConfig';
+
 export enum PackageContext {
   RETAIL_PACKAGE = 'RETAIL_PACKAGE',
   WHOLESALE_PACKAGE = 'WHOLESALE_PACKAGE',
@@ -99,9 +101,9 @@ export function clearInspectionClientCache(): void {
 export async function createInspection(
   payload: CreateInspectionPayload
 ): Promise<InspectionData> {
-  const response = await fetch('/api/inspections', {
+  const response = await fetch(getApiUrl('/api/inspections'), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     credentials: 'include',
     body: JSON.stringify(payload),
   });
@@ -146,10 +148,10 @@ export async function fetchMyInspections(
   if (params?.status) query.append('status', params.status);
   if (params?.packageContext) query.append('packageContext', params.packageContext);
 
-  const url = `/api/inspections${query.toString() ? `?${query.toString()}` : ''}`;
+  const url = getApiUrl(`/api/inspections${query.toString() ? `?${query.toString()}` : ''}`);
   const response = await fetch(url, {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     credentials: 'include',
   });
 
@@ -171,9 +173,9 @@ export async function fetchMyInspections(
  * Fetches a single inspection by ID or inspectionNumber.
  */
 export async function fetchInspectionById(id: string): Promise<InspectionData> {
-  const response = await fetch(`/api/inspections/${encodeURIComponent(id)}`, {
+  const response = await fetch(getApiUrl(`/api/inspections/${encodeURIComponent(id)}`), {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     credentials: 'include',
   });
 

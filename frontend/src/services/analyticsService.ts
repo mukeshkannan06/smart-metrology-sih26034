@@ -1,3 +1,5 @@
+import { getApiUrl, getAuthHeaders } from './apiConfig';
+
 export interface AnalyticsFilterParams {
   timeRange?: 'today' | '7d' | '30d' | '90d' | 'this_year' | 'all' | 'custom';
   startDate?: string;
@@ -193,11 +195,9 @@ export async function fetchAnalyticsOverview(
   }
 
   const qs = buildQueryString(filters);
-  const response = await fetch(`/api/analytics/overview${qs}`, {
+  const response = await fetch(getApiUrl(`/api/analytics/overview${qs}`), {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: getAuthHeaders(),
     credentials: 'include',
   });
 
@@ -223,11 +223,9 @@ export async function fetchSupervisoryInspectors(
   }
 
   const qs = buildQueryString(filters);
-  const response = await fetch(`/api/analytics/inspectors${qs}`, {
+  const response = await fetch(getApiUrl(`/api/analytics/inspectors${qs}`), {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: getAuthHeaders(),
     credentials: 'include',
   });
 
@@ -253,11 +251,9 @@ export async function fetchSupervisoryViolations(
   }
 
   const qs = buildQueryString(filters);
-  const response = await fetch(`/api/analytics/violations${qs}`, {
+  const response = await fetch(getApiUrl(`/api/analytics/violations${qs}`), {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: getAuthHeaders(),
     credentials: 'include',
   });
 
@@ -274,11 +270,9 @@ export async function fetchMonitoredInspections(
   params: AnalyticsFilterParams & { page?: number; limit?: number; search?: string; sortBy?: string; sortDir?: 'asc' | 'desc' } = {}
 ): Promise<MonitoredInspectionsResult> {
   const qs = buildQueryString(params);
-  const response = await fetch(`/api/analytics/inspections${qs}`, {
+  const response = await fetch(getApiUrl(`/api/analytics/inspections${qs}`), {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: getAuthHeaders(),
     credentials: 'include',
   });
 

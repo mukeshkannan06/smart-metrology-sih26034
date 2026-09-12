@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Menu, Activity, CheckCircle2, AlertCircle, UserCheck, LogOut, Shield } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { getApiUrl } from '../../services/apiConfig';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -14,7 +15,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   useEffect(() => {
     const checkApi = async () => {
       try {
-        const res = await fetch('/api/health');
+        const res = await fetch(getApiUrl('/api/health'));
         setApiConnected(res.ok);
       } catch {
         setApiConnected(false);

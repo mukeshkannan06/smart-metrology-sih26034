@@ -1,3 +1,5 @@
+import { getApiUrl, getAuthHeaders } from './apiConfig';
+
 export enum SampleStatus {
   PENDING = 'PENDING',
   IN_PROGRESS = 'IN_PROGRESS',
@@ -104,10 +106,10 @@ export async function createSample(
   payload: { notes?: string; status?: SampleStatus } = {}
 ): Promise<CreateSampleResponse> {
   const response = await fetch(
-    `/api/inspections/${encodeURIComponent(inspectionId)}/samples`,
+    getApiUrl(`/api/inspections/${encodeURIComponent(inspectionId)}/samples`),
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       credentials: 'include',
       body: JSON.stringify(payload),
     }
@@ -135,10 +137,10 @@ export async function fetchSamplesForInspection(
   inspectionId: string
 ): Promise<InspectionSamplesResponse> {
   const response = await fetch(
-    `/api/inspections/${encodeURIComponent(inspectionId)}/samples`,
+    getApiUrl(`/api/inspections/${encodeURIComponent(inspectionId)}/samples`),
     {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       credentials: 'include',
     }
   );
@@ -166,10 +168,10 @@ export async function fetchSampleById(
   sampleId: string
 ): Promise<{ sample: SampleData; inspection: any }> {
   const response = await fetch(
-    `/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(sampleId)}`,
+    getApiUrl(`/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(sampleId)}`),
     {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       credentials: 'include',
     }
   );
@@ -201,10 +203,10 @@ export async function updateSample(
   payload: { notes?: string; status?: SampleStatus }
 ): Promise<CreateSampleResponse> {
   const response = await fetch(
-    `/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(sampleId)}`,
+    getApiUrl(`/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(sampleId)}`),
     {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       credentials: 'include',
       body: JSON.stringify(payload),
     }
@@ -247,10 +249,10 @@ export async function uploadSampleImage(
   payload: UploadImagePayload
 ): Promise<UploadImageResponse> {
   const response = await fetch(
-    `/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(sampleId)}/images`,
+    getApiUrl(`/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(sampleId)}/images`),
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       credentials: 'include',
       body: JSON.stringify(payload),
     }
@@ -285,10 +287,10 @@ export async function fetchSampleImages(
   inspectionNumber: string;
 }> {
   const response = await fetch(
-    `/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(sampleId)}/images`,
+    getApiUrl(`/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(sampleId)}/images`),
     {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       credentials: 'include',
     }
   );
@@ -316,7 +318,7 @@ export function getSampleImageUrl(
   sampleId: string,
   imageId: string
 ): string {
-  return `/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(sampleId)}/images/${encodeURIComponent(imageId)}`;
+  return getApiUrl(`/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(sampleId)}/images/${encodeURIComponent(imageId)}`);
 }
 
 /**
@@ -331,6 +333,7 @@ export async function fetchSampleImageBlob(
     getSampleImageUrl(inspectionId, sampleId, imageId),
     {
       method: 'GET',
+      headers: getAuthHeaders({ 'Content-Type': '' }),
       credentials: 'include',
     }
   );
@@ -352,10 +355,10 @@ export async function deleteSampleImage(
   imageId: string
 ): Promise<{ sample: SampleData; progress: SampleProgressSummary; inspection: any }> {
   const response = await fetch(
-    `/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(sampleId)}/images/${encodeURIComponent(imageId)}`,
+    getApiUrl(`/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(sampleId)}/images/${encodeURIComponent(imageId)}`),
     {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       credentials: 'include',
     }
   );

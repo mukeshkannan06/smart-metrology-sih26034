@@ -1,3 +1,5 @@
+import { getApiUrl, getAuthHeaders } from './apiConfig';
+
 export enum FindingCandidateStatus {
   COMPLIANT_CANDIDATE = 'COMPLIANT_CANDIDATE',
   POTENTIAL_NON_COMPLIANCE = 'POTENTIAL_NON_COMPLIANCE',
@@ -167,14 +169,14 @@ export async function getInspectionFindings(
   if (filters.status) queryParams.append('status', filters.status);
   if (filters.isVerified !== undefined) queryParams.append('isVerified', String(filters.isVerified));
 
-  const url = `/api/findings/inspections/${encodeURIComponent(inspectionId)}${
+  const url = getApiUrl(`/api/findings/inspections/${encodeURIComponent(inspectionId)}${
     queryParams.toString() ? `?${queryParams.toString()}` : ''
-  }`;
+  }`);
 
   const response = await fetch(url, {
     method: 'GET',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -190,10 +192,10 @@ export async function getInspectionFindings(
  * Retrieves compliance findings for a specific sample unit.
  */
 export async function getSampleFindings(sampleId: string): Promise<SampleFindingsResponse> {
-  const response = await fetch(`/api/findings/samples/${encodeURIComponent(sampleId)}`, {
+  const response = await fetch(getApiUrl(`/api/findings/samples/${encodeURIComponent(sampleId)}`), {
     method: 'GET',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -209,10 +211,10 @@ export async function getSampleFindings(sampleId: string): Promise<SampleFinding
  * Retrieves a single finding by ID.
  */
 export async function getFindingById(findingId: string): Promise<ComplianceFindingData> {
-  const response = await fetch(`/api/findings/${encodeURIComponent(findingId)}`, {
+  const response = await fetch(getApiUrl(`/api/findings/${encodeURIComponent(findingId)}`), {
     method: 'GET',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -239,10 +241,10 @@ export async function verifyFinding(
   telemetry: FindingsTelemetry;
   allSampleFindingsVerified: boolean;
 }> {
-  const response = await fetch(`/api/findings/${encodeURIComponent(findingId)}/verify`, {
+  const response = await fetch(getApiUrl(`/api/findings/${encodeURIComponent(findingId)}/verify`), {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify(payload),
   });
 
@@ -265,10 +267,10 @@ export async function correctFinding(
     notes?: string;
   }
 ): Promise<ComplianceFindingData> {
-  const response = await fetch(`/api/findings/${encodeURIComponent(findingId)}/correct`, {
+  const response = await fetch(getApiUrl(`/api/findings/${encodeURIComponent(findingId)}/correct`), {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify(payload),
   });
 

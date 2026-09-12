@@ -1,4 +1,5 @@
 import { SampleData } from './sampleService';
+import { getApiUrl, getAuthHeaders } from './apiConfig';
 
 export type DeclarationCategory =
   | 'PRODUCT_NAME'
@@ -151,12 +152,12 @@ export async function analyzeSampleDeclarations(
   options?: { forceReanalyze?: boolean }
 ): Promise<AnalysisResponseData> {
   const response = await fetch(
-    `/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(
+    getApiUrl(`/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(
       sampleId
-    )}/ai-analysis`,
+    )}/ai-analysis`),
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       credentials: 'include',
       body: JSON.stringify({ forceReanalyze: Boolean(options?.forceReanalyze) }),
     }
@@ -185,11 +186,12 @@ export async function getSampleExtractions(
   sampleId: string
 ): Promise<SampleExtractionsResponse> {
   const response = await fetch(
-    `/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(
+    getApiUrl(`/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(
       sampleId
-    )}/ai-extractions`,
+    )}/ai-extractions`),
     {
       method: 'GET',
+      headers: getAuthHeaders(),
       credentials: 'include',
     }
   );
@@ -197,6 +199,9 @@ export async function getSampleExtractions(
   if (!response.ok) {
     if (response.status === 401) {
       throw new Error('Authentication session expired. Please log in again.');
+    }
+    if (response.status === 403) {
+      throw new Error('Access Denied: You do not have permission to retrieve AI extractions.');
     }
     const err = await response.json().catch(() => ({}));
     throw new Error(err.message || 'Failed to retrieve AI extractions.');
@@ -218,14 +223,14 @@ export async function reviewDeclaration(
   notes?: string
 ): Promise<AIExtractionData> {
   const response = await fetch(
-    `/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(
+    getApiUrl(`/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(
       sampleId
     )}/ai-extractions/${encodeURIComponent(extractionId)}/declarations/${encodeURIComponent(
       category
-    )}`,
+    )}`),
     {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       credentials: 'include',
       body: JSON.stringify({ status, notes }),
     }

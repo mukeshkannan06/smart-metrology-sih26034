@@ -1,3 +1,5 @@
+import { getApiUrl, getAuthHeaders } from './apiConfig';
+
 export interface ReportImageDetail {
   imageId: string;
   sequence: number;
@@ -106,9 +108,9 @@ export interface InspectionReportDTO {
  * Strictly read-only; gated by RBAC.
  */
 export async function fetchInspectionReportData(inspectionId: string): Promise<InspectionReportDTO> {
-  const response = await fetch(`/api/reports/inspections/${encodeURIComponent(inspectionId)}`, {
+  const response = await fetch(getApiUrl(`/api/reports/inspections/${encodeURIComponent(inspectionId)}`), {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     credentials: 'include',
   });
 
@@ -135,7 +137,11 @@ export async function fetchInspectionReportData(inspectionId: string): Promise<I
  */
 export async function loadImageAsDataUrl(url: string): Promise<string | null> {
   try {
-    const res = await fetch(url, { credentials: 'include' });
+    const resolvedUrl = url.startsWith('http') || url.startsWith('blob:') || url.startsWith('data:') ? url : getApiUrl(url);
+    const res = await fetch(resolvedUrl, {
+      credentials: 'include',
+      headers: getAuthHeaders({ 'Content-Type': '' }),
+    });
     if (!res.ok) return null;
     const blob = await res.blob();
     return new Promise((resolve) => {
