@@ -25,6 +25,8 @@ import {
   Check,
   AlertCircle,
   FileText,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card, CardHeader, CardContent } from '../../components/ui/Card';
@@ -44,6 +46,54 @@ import {
   verifyFinding,
   correctFinding,
 } from '../../services/findingService';
+
+export const PLAIN_ENGLISH_RULE_TITLES: Record<string, string> = {
+  'LMPC-R06-1-A': 'Manufacturer / Packer Name & Address',
+  'LMPC-R06-1-B': 'Generic Name of Commodity',
+  'LMPC-R06-1-C': 'Net Quantity Statement & Metric Units',
+  'LMPC-R06-1-D': 'Month & Year of Manufacture / Packing',
+  'LMPC-R06-1-DA': 'Maximum Retail Price (MRP) & Tax Disclaimer',
+  'LMPC-R06-1-E': 'Expiry / Best Before Date',
+  'LMPC-R06-1-F': 'Country of Origin (Imported Goods)',
+  'LMPC-R06-1-G': 'Consumer Care Details (Phone, Email, Address)',
+  'LMPC-R06-1-H': 'Unit Sale Price (USP) per g/ml/piece',
+  'LMPC-R06-1-AA': 'Dimensions of Commodity & Size Details',
+  'LMPC-R06-2-PKG-STD': 'Standard Packaging Sizes Compliance',
+  'LMPC-R09-NUMERAL-HT': 'Numeral & Letter Height Standards',
+  'LMPC-R09-AREA-PRIN': 'Principal Display Panel (PDP) Dimensions',
+  'LMPC-R27-VEG-NONVEG': 'Vegetarian / Non-Vegetarian Symbol & Quadrant',
+  'LMPC-R06-3-COMBINED': 'Combined Package Declarations & Inner Pack Details',
+  'LMPC-R06-4-DECEPTIVE': 'Protection Against Deceptive Packaging / Slack Fill',
+  'LMPC-R06-5-WHOLESALE': 'Wholesale Package Mandatory Declarations',
+  'LMPC-R06-6-EXPORT': 'Export Package Exemption & Markings',
+  'LMPC-R06-7-E-COMMERCE': 'E-Commerce Marketplace Mandatory Digital Disclosures',
+  'LMPC-R07-LANGUAGE': 'Statutory Language Requirements (Hindi / English)',
+  'LMPC-R08-CONTRAST': 'Color Contrast & Background Prominence',
+  'LMPC-R10-MULTI-UNIT': 'Multi-Piece Retail Package Declarations',
+  'LMPC-R11-GROUP-PKG': 'Group Package Declarations',
+  'LMPC-R12-FLEXIBLE': 'Flexible Pouch & Sachet Marking Rules',
+  'LMPC-R13-AEROSOL': 'Aerosol Package Net Content by Mass & Volume',
+  'LMPC-R14-SWEET-MEAT': 'Weight of Packaging Box Deduction (Sweets)',
+  'LMPC-R15-DEFACEMENT': 'Tamper Evident Seal & Anti-Defacement Standard',
+  'LMPC-R18-ALTERATION': 'No Overwriting / Stickers over MRP Declaration',
+  'LMPC-R24-SAMPLE-COL': 'Sample Collection & Inspection Protocol Compliance',
+  'LMPC-R26-EXEMPTIONS': 'Statutory Packaged Commodity Exemptions Criteria',
+  'LMPC-R28-OFFENCES': 'Cognizance of Non-Compliance & Penalty Classification',
+  'LMPC-R32-COMPOUND': 'Compounding Eligibility of Packaging Infractions',
+  'LMPC-R33-SEIZURE': 'Seizure & Detention Statutory Criteria',
+};
+
+export function formatRuleTitle(finding: ComplianceFindingData): string {
+  if (PLAIN_ENGLISH_RULE_TITLES[finding.ruleId]) {
+    return PLAIN_ENGLISH_RULE_TITLES[finding.ruleId];
+  }
+  if (finding.declarationType && finding.declarationType !== 'UNKNOWN') {
+    return finding.declarationType
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return finding.ruleReference || finding.ruleId;
+}
 
 export const ComplianceFindings: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -86,14 +136,11 @@ export const ComplianceFindings: React.FC = () => {
   const [correctionNotesInput, setCorrectionNotesInput] = useState<string>('');
   const [isSubmittingCorrection, setIsSubmittingCorrection] = useState<boolean>(false);
 
-  // Verification Modal State
-  const [verifyingFinding, setVerifyingFinding] = useState<ComplianceFindingData | null>(null);
-  const [verificationDecision, setVerificationDecision] = useState<InspectorVerificationDecision>(
-    InspectorVerificationDecision.VERIFIED_COMPLIANT
-  );
-  const [verificationValueInput, setVerificationValueInput] = useState<string>('');
-  const [verificationNotesInput, setVerificationNotesInput] = useState<string>('');
-  const [isSubmittingVerification, setIsSubmittingVerification] = useState<boolean>(false);
+  // 1-Click Verification State
+  const [verifyingFindingId, setVerifyingFindingId] = useState<string | null>(null);
+  const [showPassedDetails, setShowPassedDetails] = useState<boolean>(false);
+  const [correctionDecision, setCorrectionDecision] = useState<InspectorVerificationDecision | null>(null);
+  const [isVerifyingAllPassed, setIsVerifyingAllPassed] = useState<boolean>(false);
 
   // Evidence Lightbox State
   const [lightboxImage, setLightboxImage] = useState<{
@@ -193,29 +240,18 @@ export const ComplianceFindings: React.FC = () => {
     setSearchParams({ inspectionId: selectedInspectionId, sampleId: sId });
   };
 
-  // Open Verification Modal for finding
-  const handleOpenVerification = (
+  // Direct 1-Click Verification Handler
+  const handleDirectVerify = async (
     finding: ComplianceFindingData,
-    initialDecision: InspectorVerificationDecision
+    decision: InspectorVerificationDecision
   ) => {
-    setVerifyingFinding(finding);
-    setVerificationDecision(initialDecision);
-    setVerificationValueInput(
-      finding.inspectorVerification.verifiedValue || finding.aiObservation.extractedValue || ''
-    );
-    setVerificationNotesInput(finding.inspectorVerification.notes || '');
-  };
-
-  // Submit Verification
-  const handleSubmitVerification = async () => {
-    if (!verifyingFinding) return;
-
     try {
-      setIsSubmittingVerification(true);
-      const result = await verifyFinding(verifyingFinding._id, {
-        decision: verificationDecision,
-        verifiedValue: verificationValueInput.trim() || undefined,
-        notes: verificationNotesInput.trim() || undefined,
+      setVerifyingFindingId(finding._id);
+      const result = await verifyFinding(finding._id, {
+        decision,
+        verifiedValue:
+          finding.inspectorVerification.verifiedValue || finding.aiObservation.extractedValue || undefined,
+        notes: finding.inspectorVerification.notes || undefined,
       });
 
       // Update local findings state
@@ -224,62 +260,83 @@ export const ComplianceFindings: React.FC = () => {
       );
       setTelemetry(result.telemetry);
 
+      const decisionLabel =
+        decision === InspectorVerificationDecision.VERIFIED_COMPLIANT
+          ? 'Verified Compliant'
+          : decision === InspectorVerificationDecision.VERIFIED_NON_COMPLIANT
+          ? 'Flagged Non-Compliance'
+          : decision === InspectorVerificationDecision.VERIFIED_REQUIRES_FURTHER_REVIEW
+          ? 'Action Required'
+          : 'Marked Not Applicable';
+
       setFeedbackMessage({
         type: 'success',
-        text: `Rule ${result.finding.ruleReference} successfully verified as ${FINDING_STATUS_META[result.finding.status]?.label}.`,
+        text: `Rule ${result.finding.ruleReference} confirmed as ${decisionLabel}.`,
         findingId: result.finding._id,
       });
-
-      setVerifyingFinding(null);
+      setTimeout(() => setFeedbackMessage(null), 3500);
     } catch (err: any) {
       setFeedbackMessage({
         type: 'error',
         text: err.message || 'Failed to submit verification.',
-        findingId: verifyingFinding._id,
+        findingId: finding._id,
       });
     } finally {
-      setIsSubmittingVerification(false);
+      setVerifyingFindingId(null);
     }
   };
 
-  // Open Correction Modal
+  // Open Correction & Notes Modal
   const handleOpenCorrection = (finding: ComplianceFindingData) => {
     setCorrectingFinding(finding);
     setCorrectedValueInput(
       finding.inspectorVerification.verifiedValue || finding.aiObservation.extractedValue || ''
     );
     setCorrectionNotesInput(finding.inspectorVerification.notes || '');
+    setCorrectionDecision(finding.inspectorVerification.decision || null);
   };
 
-  // Submit Value Correction
+  // Submit Value Correction & Notes
   const handleSubmitCorrection = async () => {
     if (!correctingFinding) return;
 
-    if (!correctedValueInput.trim()) {
-      alert('Please enter a corrected declaration value.');
-      return;
-    }
-
     try {
       setIsSubmittingCorrection(true);
-      const updated = await correctFinding(correctingFinding._id, {
-        correctedValue: correctedValueInput.trim(),
-        notes: correctionNotesInput.trim() || undefined,
-      });
+      let updated = correctingFinding;
+
+      // 1. If value was edited
+      if (correctedValueInput.trim()) {
+        updated = await correctFinding(correctingFinding._id, {
+          correctedValue: correctedValueInput.trim(),
+          notes: correctionNotesInput.trim() || undefined,
+        });
+      }
+
+      // 2. If determination decision was also chosen
+      if (correctionDecision) {
+        const verifyRes = await verifyFinding(correctingFinding._id, {
+          decision: correctionDecision,
+          verifiedValue: correctedValueInput.trim() || undefined,
+          notes: correctionNotesInput.trim() || undefined,
+        });
+        updated = verifyRes.finding;
+        setTelemetry(verifyRes.telemetry);
+      }
 
       setFindings((prev) => prev.map((f) => (f._id === updated._id ? updated : f)));
 
       setFeedbackMessage({
         type: 'success',
-        text: `Declaration for ${updated.ruleReference} updated. Original AI extraction remains safely preserved.`,
+        text: `Observation & notes for ${updated.ruleReference} updated successfully.`,
         findingId: updated._id,
       });
+      setTimeout(() => setFeedbackMessage(null), 3500);
 
       setCorrectingFinding(null);
     } catch (err: any) {
       setFeedbackMessage({
         type: 'error',
-        text: err.message || 'Failed to correct observation.',
+        text: err.message || 'Failed to save correction.',
         findingId: correctingFinding._id,
       });
     } finally {
@@ -287,28 +344,169 @@ export const ComplianceFindings: React.FC = () => {
     }
   };
 
+  // Batch Confirm Rules Handler
+  const handleVerifyBatch = async (batchItems: ComplianceFindingData[]) => {
+    const unverified = batchItems.filter((f) => !f.isVerified);
+    if (unverified.length === 0) return;
+
+    try {
+      setIsVerifyingAllPassed(true);
+      const updatePromises = unverified.map((f) =>
+        verifyFinding(f._id, {
+          decision: InspectorVerificationDecision.VERIFIED_COMPLIANT,
+          verifiedValue: f.aiObservation.extractedValue || undefined,
+          notes: 'Statutory compliance confirmed from deterministic evaluation',
+        })
+      );
+
+      const results = await Promise.all(updatePromises);
+      const updatedMap = new Map(results.map((r) => [r.finding._id, r.finding]));
+
+      setFindings((prev) =>
+        prev.map((f) => (updatedMap.has(f._id) ? updatedMap.get(f._id)! : f))
+      );
+
+      if (results.length > 0) {
+        setTelemetry(results[results.length - 1].telemetry);
+      }
+
+      setFeedbackMessage({
+        type: 'success',
+        text: `Successfully recorded all ${unverified.length} passed rules as Verified Compliant.`,
+      });
+      setTimeout(() => setFeedbackMessage(null), 3500);
+    } catch (err: any) {
+      setFeedbackMessage({
+        type: 'error',
+        text: err.message || 'Failed to verify passed rules.',
+      });
+    } finally {
+      setIsVerifyingAllPassed(false);
+    }
+  };
+
+  const handleVerifyAllPassed = () => handleVerifyBatch(passedFindings);
+
+  // Compute enriched KPI metrics incorporating already-passed rules (excluding non-applicable rules)
+  const kpiMetrics = useMemo(() => {
+    const applicableFindings = findings.filter(
+      (f) =>
+        f.candidateStatus !== FindingCandidateStatus.NOT_APPLICABLE &&
+        f.status !== FindingStatus.VERIFIED_NOT_APPLICABLE
+    );
+
+    const totalChecks = applicableFindings.length;
+    if (totalChecks === 0) {
+      return {
+        totalChecks: 0,
+        clearedCount: 0,
+        clearedPercent: 0,
+        passedCleanCount: 0,
+        verifiedAttentionCount: 0,
+        compliantTotal: 0,
+        nonComplianceTotal: 0,
+        requiresReviewTotal: 0,
+      };
+    }
+
+    let passedCleanCount = 0;
+    let verifiedAttentionCount = 0;
+    let compliantTotal = 0;
+    let nonComplianceTotal = 0;
+    let requiresReviewTotal = 0;
+
+    applicableFindings.forEach((f) => {
+      const isAttention =
+        f.candidateStatus === FindingCandidateStatus.POTENTIAL_NON_COMPLIANCE ||
+        f.status === FindingStatus.VERIFIED_NON_COMPLIANT ||
+        f.candidateStatus === FindingCandidateStatus.REQUIRES_INSPECTOR_REVIEW ||
+        f.status === FindingStatus.VERIFIED_REQUIRES_FURTHER_REVIEW ||
+        f.aiObservation.state === 'NOT_DETECTED' ||
+        f.aiObservation.confidence === 'LOW' ||
+        f.isCorrected;
+
+      if (!isAttention) {
+        // Clean statutory pass
+        passedCleanCount++;
+        compliantTotal++;
+      } else {
+        // Attention requirement
+        if (f.isVerified) {
+          verifiedAttentionCount++;
+          if (f.status === FindingStatus.VERIFIED_COMPLIANT) {
+            compliantTotal++;
+          } else if (f.status === FindingStatus.VERIFIED_NON_COMPLIANT) {
+            nonComplianceTotal++;
+          } else if (f.status === FindingStatus.VERIFIED_REQUIRES_FURTHER_REVIEW) {
+            requiresReviewTotal++;
+          }
+        } else {
+          // Unverified candidate
+          if (f.candidateStatus === FindingCandidateStatus.POTENTIAL_NON_COMPLIANCE) {
+            nonComplianceTotal++;
+          } else if (f.candidateStatus === FindingCandidateStatus.REQUIRES_INSPECTOR_REVIEW) {
+            requiresReviewTotal++;
+          }
+        }
+      }
+    });
+
+    const clearedCount = passedCleanCount + verifiedAttentionCount;
+    const clearedPercent = totalChecks > 0 ? Math.min(100, Math.round((clearedCount / totalChecks) * 100)) : 0;
+
+    return {
+      totalChecks,
+      clearedCount,
+      clearedPercent,
+      passedCleanCount,
+      verifiedAttentionCount,
+      compliantTotal,
+      nonComplianceTotal,
+      requiresReviewTotal,
+    };
+  }, [findings]);
+
   // Filtered Findings computed list
   const filteredFindings = useMemo(() => {
     return findings.filter((f) => {
+      // Exclude non-applicable / exempt rules completely so inspectors only see active rules
+      if (
+        f.candidateStatus === FindingCandidateStatus.NOT_APPLICABLE ||
+        f.status === FindingStatus.VERIFIED_NOT_APPLICABLE
+      ) {
+        return false;
+      }
+
+      const isCleanPass =
+        f.candidateStatus === FindingCandidateStatus.COMPLIANT_CANDIDATE &&
+        f.aiObservation.state !== 'NOT_DETECTED' &&
+        f.aiObservation.confidence !== 'LOW' &&
+        !f.isCorrected;
+
       // 1. Tab filter
       if (filterTab === 'POTENTIAL_NON_COMPLIANCE') {
-        if (f.candidateStatus !== FindingCandidateStatus.POTENTIAL_NON_COMPLIANCE && f.status !== FindingStatus.VERIFIED_NON_COMPLIANT) {
+        if (
+          f.candidateStatus !== FindingCandidateStatus.POTENTIAL_NON_COMPLIANCE &&
+          f.status !== FindingStatus.VERIFIED_NON_COMPLIANT
+        ) {
           return false;
         }
       } else if (filterTab === 'REQUIRES_INSPECTOR_REVIEW') {
-        if (f.candidateStatus !== FindingCandidateStatus.REQUIRES_INSPECTOR_REVIEW && f.status !== FindingStatus.VERIFIED_REQUIRES_FURTHER_REVIEW) {
+        if (
+          f.candidateStatus !== FindingCandidateStatus.REQUIRES_INSPECTOR_REVIEW &&
+          f.status !== FindingStatus.VERIFIED_REQUIRES_FURTHER_REVIEW
+        ) {
           return false;
         }
       } else if (filterTab === 'COMPLIANT_CANDIDATE') {
-        if (f.candidateStatus !== FindingCandidateStatus.COMPLIANT_CANDIDATE && f.status !== FindingStatus.VERIFIED_COMPLIANT) {
+        if (
+          f.candidateStatus !== FindingCandidateStatus.COMPLIANT_CANDIDATE &&
+          f.status !== FindingStatus.VERIFIED_COMPLIANT
+        ) {
           return false;
         }
       } else if (filterTab === 'VERIFIED') {
-        if (!f.isVerified) return false;
-      } else if (filterTab === 'NOT_APPLICABLE') {
-        if (f.candidateStatus !== FindingCandidateStatus.NOT_APPLICABLE && f.status !== FindingStatus.VERIFIED_NOT_APPLICABLE) {
-          return false;
-        }
+        if (!f.isVerified && !isCleanPass) return false;
       }
 
       // 2. Search query filter
@@ -317,9 +515,10 @@ export const ComplianceFindings: React.FC = () => {
         const matchId = f.ruleId.toLowerCase().includes(q);
         const matchRef = f.ruleReference.toLowerCase().includes(q);
         const matchDecl = f.declarationType.toLowerCase().includes(q);
+        const matchTitle = formatRuleTitle(f).toLowerCase().includes(q);
         const matchReq = f.requirementDescription.toLowerCase().includes(q);
         const matchObs = (f.aiObservation.extractedValue || '').toLowerCase().includes(q);
-        if (!matchId && !matchRef && !matchDecl && !matchReq && !matchObs) {
+        if (!matchId && !matchRef && !matchDecl && !matchTitle && !matchReq && !matchObs) {
           return false;
         }
       }
@@ -327,6 +526,630 @@ export const ComplianceFindings: React.FC = () => {
       return true;
     });
   }, [findings, filterTab, searchQuery]);
+
+  // Split findings into Attention-Required vs All-Clear Passed
+  const { attentionFindings, passedFindings } = useMemo(() => {
+    const attention: ComplianceFindingData[] = [];
+    const passed: ComplianceFindingData[] = [];
+
+    filteredFindings.forEach((f) => {
+      const isAttention =
+        f.candidateStatus === FindingCandidateStatus.POTENTIAL_NON_COMPLIANCE ||
+        f.status === FindingStatus.VERIFIED_NON_COMPLIANT ||
+        f.candidateStatus === FindingCandidateStatus.REQUIRES_INSPECTOR_REVIEW ||
+        f.status === FindingStatus.VERIFIED_REQUIRES_FURTHER_REVIEW ||
+        f.aiObservation.state === 'NOT_DETECTED' ||
+        f.aiObservation.confidence === 'LOW' ||
+        f.isCorrected;
+
+      if (isAttention) {
+        attention.push(f);
+      } else {
+        passed.push(f);
+      }
+    });
+
+    return { attentionFindings: attention, passedFindings: passed };
+  }, [filteredFindings]);
+
+  // Render an individual Finding Card with 1-Click Verification Toolbar
+  const renderFindingCard = (finding: ComplianceFindingData) => {
+    const candidateMeta = FINDING_STATUS_META[finding.candidateStatus] || {
+      label: finding.candidateStatus,
+      badgeVariant: 'neutral' as BadgeVariant,
+    };
+
+    const verifiedMeta = finding.isVerified
+      ? FINDING_STATUS_META[finding.status] || {
+          label: finding.status,
+          badgeVariant: 'neutral' as BadgeVariant,
+        }
+      : null;
+
+    const isFindingProcessing = verifyingFindingId === finding._id;
+
+    return (
+      <Card
+        key={finding._id}
+        className={`border transition-all duration-150 ${
+          finding.isVerified
+            ? 'border-slate-200 bg-white shadow-2xs'
+            : finding.candidateStatus === FindingCandidateStatus.POTENTIAL_NON_COMPLIANCE
+            ? 'border-rose-200 bg-rose-50/20 shadow-xs ring-1 ring-rose-200/50'
+            : finding.candidateStatus === FindingCandidateStatus.REQUIRES_INSPECTOR_REVIEW
+            ? 'border-amber-200 bg-amber-50/20 shadow-xs ring-1 ring-amber-200/50'
+            : 'border-slate-200 bg-white shadow-xs'
+        }`}
+      >
+        <CardContent className="p-4 sm:p-5 space-y-4">
+          {/* Card Header Row */}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-bold text-slate-900">
+                  {formatRuleTitle(finding)}
+                </h3>
+                <span className="font-bold text-xs text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                  {finding.ruleReference}
+                </span>
+                <span className="text-[11px] font-mono text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+                  Unit: {finding.sampleCode}
+                </span>
+                <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                  {finding.ruleFamily.replace(/_/g, ' ')}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium">
+                {finding.requirementDescription}
+              </p>
+            </div>
+
+            {/* Status Badges */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Candidate Status Badge */}
+              <Badge variant={candidateMeta.badgeVariant} size="sm">
+                Candidate: {candidateMeta.label}
+              </Badge>
+
+              {/* Verified Status Badge */}
+              {finding.isVerified && verifiedMeta && (
+                <Badge
+                  variant={verifiedMeta.badgeVariant}
+                  size="sm"
+                  icon={<ShieldCheck className="w-3 h-3" />}
+                >
+                  {verifiedMeta.label}
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          {/* 3-Layer Observation vs Requirement Comparison Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+            {/* Left Column: Visual AI Observation Layer */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Eye className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                    Visual AI Observation
+                  </span>
+                </div>
+                {finding.aiObservation.confidence && (
+                  <span
+                    className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                      finding.aiObservation.confidence === 'HIGH'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : finding.aiObservation.confidence === 'MEDIUM'
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-rose-100 text-rose-800'
+                    }`}
+                  >
+                    Confidence: {finding.aiObservation.confidence}
+                  </span>
+                )}
+              </div>
+
+              {/* Observed Value Box */}
+              <div className="space-y-1">
+                <div className="text-[11px] text-slate-500">Observed Value on Package:</div>
+                <div className="p-2 rounded bg-white border border-slate-200 font-mono text-xs font-semibold text-slate-800 break-words">
+                  {finding.inspectorVerification.verifiedValue ||
+                    finding.aiObservation.extractedValue || (
+                      <span className="text-slate-400 italic">No declaration detected</span>
+                    )}
+                </div>
+              </div>
+
+              {/* If Corrected: Show Preserved Original AI Extraction */}
+              {finding.isCorrected && finding.inspectorVerification.originalAiValuePreserved && (
+                <div className="p-2 rounded-lg bg-amber-50/70 border border-amber-200 text-[11px] space-y-1">
+                  <div className="flex items-center space-x-1.5 text-amber-800 font-bold">
+                    <RotateCcw className="w-3 h-3 text-amber-600" />
+                    <span>Original AI Extraction Preserved:</span>
+                  </div>
+                  <div className="font-mono text-amber-900 bg-white/70 px-2 py-1 rounded border border-amber-200/50">
+                    {finding.inspectorVerification.originalAiValuePreserved}
+                  </div>
+                  <p className="text-[10px] text-amber-700">
+                    Verified value corrected to: <strong className="font-mono">{finding.inspectorVerification.verifiedValue}</strong>
+                  </p>
+                </div>
+              )}
+
+              {/* Evidence Photo Thumbnails */}
+              {finding.aiObservation.evidenceImageIds &&
+                finding.aiObservation.evidenceImageIds.length > 0 &&
+                currentInspection && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase">
+                      Attached Photo Evidence:
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {finding.aiObservation.evidenceImageIds.map((imgId: string, idx: number) => {
+                        const imgUrl = getSampleImageUrl(
+                          currentInspection._id,
+                          finding.sampleId,
+                          imgId
+                        );
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() =>
+                              setLightboxImage({
+                                url: imgUrl,
+                                title: `Evidence for ${finding.ruleReference}`,
+                                subtitle: `Declaration: ${finding.declarationType} • Unit: ${finding.sampleCode}`,
+                              })
+                            }
+                            className="group relative w-16 h-16 rounded-lg overflow-hidden border border-slate-200 hover:border-blue-500 transition-colors cursor-pointer"
+                          >
+                            <img
+                              src={imgUrl}
+                              alt="Evidence thumbnail"
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            />
+                            <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                              <Eye className="w-4 h-4" />
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+            </div>
+
+            {/* Right Column: Statutory Legal Requirement Layer */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 flex flex-col justify-between">
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <FileText className="w-3.5 h-3.5 text-slate-500" />
+                    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                      Statutory Legal Requirement
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-semibold">
+                    DB v{finding.ruleEngineResult.ruleDatabaseVersion}
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                  {finding.requirementDescription}
+                </p>
+
+                <div className="p-2.5 rounded bg-white border border-slate-200 space-y-1">
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    Deterministic Evaluation Reason:
+                  </div>
+                  <p className="text-xs text-slate-800 font-mono">
+                    {finding.ruleEngineResult.reason ||
+                      'Evaluated against statutory package criteria.'}
+                  </p>
+                </div>
+              </div>
+
+              {finding.ruleEngineResult.applicabilityExplanation && (
+                <div className="text-[11px] text-slate-500 italic">
+                  Scope: {finding.ruleEngineResult.applicabilityExplanation}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Verification Banner / Record (If already verified) */}
+          {finding.isVerified ? (
+            <div className="p-3.5 rounded-xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-bold text-slate-100">
+                    Officer Determination Recorded
+                  </span>
+                  <span className="text-slate-600">&bull;</span>
+                  <span className="text-xs font-mono font-bold text-emerald-400">
+                    {finding.status}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Verified by:{' '}
+                  <strong className="text-slate-200">
+                    {finding.inspectorVerification.verifiedByName ||
+                      finding.inspectorVerification.verifiedBy}
+                  </strong>{' '}
+                  on{' '}
+                  {finding.inspectorVerification.verifiedAt
+                    ? new Date(
+                        finding.inspectorVerification.verifiedAt
+                      ).toLocaleString('en-IN')
+                    : 'Recorded'}
+                </p>
+                {finding.inspectorVerification.notes && (
+                  <p className="text-xs text-slate-300 italic pt-0.5">
+                    Note: "{finding.inspectorVerification.notes}"
+                  </p>
+                )}
+              </div>
+
+              {/* Direct Quick Re-verify / Update for Inspector */}
+              {!isController && (
+                <div className="flex items-center space-x-2 flex-shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isFindingProcessing}
+                    className="bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700 text-xs"
+                    onClick={() =>
+                      handleDirectVerify(
+                        finding,
+                        finding.inspectorVerification.decision ===
+                          InspectorVerificationDecision.VERIFIED_COMPLIANT
+                          ? InspectorVerificationDecision.VERIFIED_NON_COMPLIANT
+                          : InspectorVerificationDecision.VERIFIED_COMPLIANT
+                      )
+                    }
+                  >
+                    {isFindingProcessing ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : finding.inspectorVerification.decision ===
+                      InspectorVerificationDecision.VERIFIED_COMPLIANT ? (
+                      'Change to Violation'
+                    ) : (
+                      'Change to Compliant'
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700 text-xs"
+                    onClick={() => handleOpenCorrection(finding)}
+                    icon={<Edit3 className="w-3.5 h-3.5" />}
+                  >
+                    Edit Notes
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Direct 1-Click Inspector Action Toolbar */
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+              <div className="flex flex-wrap items-center gap-2">
+                {isController ? (
+                  <div className="text-xs text-slate-400 italic">
+                    Verification action restricted to assigned field inspector.
+                  </div>
+                ) : (
+                  <>
+                    {/* Direct 1-Click Verify Compliant */}
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={isFindingProcessing}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs"
+                      icon={
+                        isFindingProcessing ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )
+                      }
+                      onClick={() =>
+                        handleDirectVerify(
+                          finding,
+                          InspectorVerificationDecision.VERIFIED_COMPLIANT
+                        )
+                      }
+                    >
+                      Verify Compliant
+                    </Button>
+
+                    {/* Direct 1-Click Flag Non-Compliant */}
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={isFindingProcessing}
+                      className="text-xs font-semibold shadow-2xs"
+                      icon={
+                        isFindingProcessing ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <XCircle className="w-3.5 h-3.5" />
+                        )
+                      }
+                      onClick={() =>
+                        handleDirectVerify(
+                          finding,
+                          InspectorVerificationDecision.VERIFIED_NON_COMPLIANT
+                        )
+                      }
+                    >
+                      Flag Violation
+                    </Button>
+
+                    {/* Direct 1-Click Action Required */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isFindingProcessing}
+                      className="border-amber-300 text-amber-800 hover:bg-amber-50 text-xs"
+                      icon={<AlertTriangle className="w-3.5 h-3.5 text-amber-600" />}
+                      onClick={() =>
+                        handleDirectVerify(
+                          finding,
+                          InspectorVerificationDecision.VERIFIED_REQUIRES_FURTHER_REVIEW
+                        )
+                      }
+                    >
+                      Action Required
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              {/* Right: Correct Value & Add Notes Button */}
+              {!isController && (
+                <div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={<Edit3 className="w-3.5 h-3.5 text-blue-600" />}
+                    onClick={() => handleOpenCorrection(finding)}
+                    className="text-xs text-blue-700 border-blue-200 hover:bg-blue-50"
+                  >
+                    Correct Value / Notes
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
+  // Render Compact 1-Line Statutory Checklist Table for Passing / Compliant Rules
+  const renderChecklistTable = (
+    items: ComplianceFindingData[],
+    title: string = 'Statutory Requirements Checklist',
+    subtitle: string = 'Passing declarations verified compliant under Legal Metrology Rules',
+    showBatchButton: boolean = true
+  ) => {
+    if (items.length === 0) return null;
+
+    const unverifiedCount = items.filter((f) => !f.isVerified).length;
+
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+        {/* Table Header Strip */}
+        <div className="p-4 sm:px-5 sm:py-3.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <div className="flex items-center space-x-2">
+              <CheckSquare className="w-4 h-4 text-emerald-600" />
+              <h4 className="text-sm font-bold text-slate-900">{title}</h4>
+              <span className="text-xs font-semibold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full">
+                {items.length} Rules
+              </span>
+            </div>
+            {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
+          </div>
+
+          {showBatchButton && unverifiedCount > 0 && !isController && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isVerifyingAllPassed}
+              onClick={() => handleVerifyBatch(items)}
+              className="bg-white border-emerald-300 text-emerald-800 hover:bg-emerald-50 text-xs shadow-2xs font-semibold self-start sm:self-auto"
+              icon={
+                isVerifyingAllPassed ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                )
+              }
+            >
+              {isVerifyingAllPassed
+                ? 'Recording...'
+                : `Batch Confirm All (${unverifiedCount})`}
+            </Button>
+          )}
+        </div>
+
+        {/* Responsive Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs text-left">
+            <thead className="text-[11px] text-slate-600 font-bold uppercase bg-slate-100/70 border-b border-slate-200 tracking-wider">
+              <tr>
+                <th className="py-3 px-4">Statutory Declaration Parameter</th>
+                <th className="py-3 px-4">Observed on Package</th>
+                <th className="py-3 px-3 text-center">Unit</th>
+                <th className="py-3 px-3">Evaluation Status</th>
+                <th className="py-3 px-3 text-center">Evidence</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-slate-700 bg-white">
+              {items.map((finding) => {
+                const isProcessing = verifyingFindingId === finding._id;
+                const hasEvidence =
+                  finding.aiObservation.evidenceImageIds &&
+                  finding.aiObservation.evidenceImageIds.length > 0;
+
+                return (
+                  <tr
+                    key={finding._id}
+                    className="hover:bg-slate-50/80 transition-colors"
+                  >
+                    {/* Plain English Parameter Name & Citation */}
+                    <td className="py-3 px-4">
+                      <div className="space-y-0.5">
+                        <div className="font-bold text-slate-900 text-xs">
+                          {formatRuleTitle(finding)}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                          <span className="font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                            {finding.ruleReference}
+                          </span>
+                          <span className="text-slate-300">&bull;</span>
+                          <span className="truncate max-w-xs" title={finding.requirementDescription}>
+                            {finding.requirementDescription}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Observed Value on Package */}
+                    <td className="py-3 px-4">
+                      {finding.inspectorVerification.verifiedValue ||
+                      finding.aiObservation.extractedValue ? (
+                        <span
+                          className="font-mono text-xs font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-block max-w-xs truncate"
+                          title={
+                            finding.inspectorVerification.verifiedValue ||
+                            finding.aiObservation.extractedValue ||
+                            ''
+                          }
+                        >
+                          {finding.inspectorVerification.verifiedValue ||
+                            finding.aiObservation.extractedValue}
+                        </span>
+                      ) : (
+                        <span className="text-emerald-700 font-medium italic text-[11px]">
+                          Compliant standard format
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Sample Unit */}
+                    <td className="py-3 px-3 text-center font-mono text-[11px] text-slate-500">
+                      {finding.sampleCode}
+                    </td>
+
+                    {/* Evaluation Status Badge */}
+                    <td className="py-3 px-3">
+                      <Badge
+                        variant={finding.isVerified ? 'success' : 'info'}
+                        size="sm"
+                        icon={
+                          finding.isVerified ? (
+                            <ShieldCheck className="w-3 h-3" />
+                          ) : undefined
+                        }
+                      >
+                        {finding.isVerified
+                          ? 'Verified Compliant'
+                          : 'Compliant Candidate'}
+                      </Badge>
+                    </td>
+
+                    {/* Photo Evidence Preview */}
+                    <td className="py-3 px-3 text-center">
+                      {hasEvidence && currentInspection ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const imgId = finding.aiObservation.evidenceImageIds[0];
+                            const url = getSampleImageUrl(
+                              currentInspection._id,
+                              finding.sampleId,
+                              imgId
+                            );
+                            setLightboxImage({
+                              url,
+                              title: `${formatRuleTitle(finding)} (${finding.ruleReference})`,
+                              subtitle: `Observed: ${
+                                finding.aiObservation.extractedValue || 'Compliant'
+                              } • Unit: ${finding.sampleCode}`,
+                            });
+                          }}
+                          title="View Attached Evidence Photo"
+                          className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded cursor-pointer transition-colors inline-flex items-center gap-1"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5" />
+                          <span className="text-[10px] font-semibold">
+                            {finding.aiObservation.evidenceImageIds.length}
+                          </span>
+                        </button>
+                      ) : (
+                        <span className="text-slate-300">&mdash;</span>
+                      )}
+                    </td>
+
+                    {/* Quick 1-Click Action & Edit */}
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex items-center justify-end space-x-1.5">
+                        {!finding.isVerified && !isController && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isProcessing}
+                            onClick={() =>
+                              handleDirectVerify(
+                                finding,
+                                InspectorVerificationDecision.VERIFIED_COMPLIANT
+                              )
+                            }
+                            className="text-[11px] py-1 px-2.5 bg-white border-emerald-300 text-emerald-800 hover:bg-emerald-600 hover:text-white transition-colors shadow-2xs font-semibold"
+                            icon={
+                              isProcessing ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Check className="w-3 h-3 text-emerald-600" />
+                              )
+                            }
+                          >
+                            {isProcessing ? 'Saving...' : 'Verify'}
+                          </Button>
+                        )}
+                        {finding.isVerified && (
+                          <span className="inline-flex items-center text-emerald-700 text-[11px] font-semibold mr-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                            Recorded
+                          </span>
+                        )}
+                        {!isController && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenCorrection(finding)}
+                            title="Edit observed value or notes"
+                            className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded cursor-pointer transition-colors"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -474,15 +1297,15 @@ export const ComplianceFindings: React.FC = () => {
       )}
 
       {/* Telemetry KPI Strip */}
-      {telemetry && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {(telemetry || findings.length > 0) && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {/* Total Findings */}
           <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
               Total Checks
             </span>
             <div className="text-xl font-extrabold text-slate-900 font-mono">
-              {telemetry.totalFindings}
+              {kpiMetrics.totalChecks}
             </div>
             <p className="text-[10px] text-slate-400">Statutory parameters</p>
           </div>
@@ -491,21 +1314,26 @@ export const ComplianceFindings: React.FC = () => {
           <div className="p-3.5 rounded-xl bg-white border border-blue-200 shadow-2xs space-y-1.5 col-span-2 sm:col-span-1">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">
-                Verified
+                Verified / Cleared
               </span>
               <span className="text-xs font-mono font-bold text-blue-800">
-                {telemetry.percentVerified}%
+                {kpiMetrics.clearedPercent}%
               </span>
             </div>
             <div className="text-xl font-extrabold text-blue-900 font-mono">
-              {telemetry.verifiedCount} / {telemetry.totalFindings}
+              {kpiMetrics.clearedCount} / {kpiMetrics.totalChecks}
             </div>
             <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
               <div
-                className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
-                style={{ width: `${telemetry.percentVerified}%` }}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  kpiMetrics.clearedPercent === 100 ? 'bg-emerald-600' : 'bg-blue-600'
+                }`}
+                style={{ width: `${kpiMetrics.clearedPercent}%` }}
               />
             </div>
+            <p className="text-[10px] text-slate-500 font-medium">
+              {kpiMetrics.passedCleanCount} passed + {kpiMetrics.verifiedAttentionCount} verified
+            </p>
           </div>
 
           {/* Compliant Candidates */}
@@ -514,9 +1342,11 @@ export const ComplianceFindings: React.FC = () => {
               Compliant
             </span>
             <div className="text-xl font-extrabold text-emerald-700 font-mono">
-              {telemetry.candidateBreakdown.compliantCandidates}
+              {kpiMetrics.compliantTotal}
             </div>
-            <p className="text-[10px] text-emerald-600">Deterministic Pass</p>
+            <p className="text-[10px] text-emerald-600 font-medium">
+              {kpiMetrics.passedCleanCount} passed + {kpiMetrics.compliantTotal - kpiMetrics.passedCleanCount} verified
+            </p>
           </div>
 
           {/* Potential Non-Compliances */}
@@ -525,9 +1355,11 @@ export const ComplianceFindings: React.FC = () => {
               Non-Compliance
             </span>
             <div className="text-xl font-extrabold text-rose-700 font-mono">
-              {telemetry.candidateBreakdown.potentialNonCompliances}
+              {kpiMetrics.nonComplianceTotal}
             </div>
-            <p className="text-[10px] text-rose-600">Potential violations</p>
+            <p className="text-[10px] text-rose-600">
+              {findings.filter((f) => f.status === FindingStatus.VERIFIED_NON_COMPLIANT).length} flagged violations
+            </p>
           </div>
 
           {/* Requires Review */}
@@ -536,20 +1368,9 @@ export const ComplianceFindings: React.FC = () => {
               Requires Review
             </span>
             <div className="text-xl font-extrabold text-amber-700 font-mono">
-              {telemetry.candidateBreakdown.requiresReview}
+              {kpiMetrics.requiresReviewTotal}
             </div>
             <p className="text-[10px] text-amber-600">Manual inspection</p>
-          </div>
-
-          {/* Not Applicable */}
-          <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              Not Applicable
-            </span>
-            <div className="text-xl font-extrabold text-slate-600 font-mono">
-              {telemetry.candidateBreakdown.notApplicable}
-            </div>
-            <p className="text-[10px] text-slate-400">Context excluded</p>
           </div>
         </div>
       )}
@@ -592,7 +1413,7 @@ export const ComplianceFindings: React.FC = () => {
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
           >
-            All Checks ({findings.length})
+            All Checks ({kpiMetrics.totalChecks})
           </button>
           <button
             onClick={() => setFilterTab('POTENTIAL_NON_COMPLIANCE')}
@@ -602,7 +1423,7 @@ export const ComplianceFindings: React.FC = () => {
                 : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
             }`}
           >
-            Potential Violations ({telemetry?.candidateBreakdown.potentialNonCompliances || 0})
+            Violations & Discrepancies ({kpiMetrics.nonComplianceTotal})
           </button>
           <button
             onClick={() => setFilterTab('REQUIRES_INSPECTOR_REVIEW')}
@@ -612,7 +1433,7 @@ export const ComplianceFindings: React.FC = () => {
                 : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
             }`}
           >
-            Requires Review ({telemetry?.candidateBreakdown.requiresReview || 0})
+            Requires Review ({kpiMetrics.requiresReviewTotal})
           </button>
           <button
             onClick={() => setFilterTab('COMPLIANT_CANDIDATE')}
@@ -622,7 +1443,7 @@ export const ComplianceFindings: React.FC = () => {
                 : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
             }`}
           >
-            Compliant Candidates ({telemetry?.candidateBreakdown.compliantCandidates || 0})
+            Compliant ({kpiMetrics.compliantTotal})
           </button>
           <button
             onClick={() => setFilterTab('VERIFIED')}
@@ -632,17 +1453,7 @@ export const ComplianceFindings: React.FC = () => {
                 : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
             }`}
           >
-            Verified by Inspector ({telemetry?.verifiedCount || 0})
-          </button>
-          <button
-            onClick={() => setFilterTab('NOT_APPLICABLE')}
-            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
-              filterTab === 'NOT_APPLICABLE'
-                ? 'bg-slate-600 text-white'
-                : 'bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            Exempt / N/A ({telemetry?.candidateBreakdown.notApplicable || 0})
+            Verified / Cleared ({kpiMetrics.clearedCount})
           </button>
         </div>
 
@@ -651,7 +1462,7 @@ export const ComplianceFindings: React.FC = () => {
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search by rule, section, declaration..."
+            placeholder="Search statutory parameters, rules, declarations..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white placeholder-slate-400 focus:outline-hidden focus:border-blue-500 shadow-2xs"
@@ -678,545 +1489,171 @@ export const ComplianceFindings: React.FC = () => {
           </p>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {filteredFindings.map((finding) => {
-            const candidateMeta = FINDING_STATUS_META[finding.candidateStatus] || {
-              label: finding.candidateStatus,
-              badgeVariant: 'neutral' as BadgeVariant,
-            };
-
-            const verifiedMeta = finding.isVerified
-              ? FINDING_STATUS_META[finding.status] || {
-                  label: finding.status,
-                  badgeVariant: 'neutral' as BadgeVariant,
-                }
-              : null;
-
-            return (
-              <Card
-                key={finding._id}
-                className={`border transition-all duration-150 ${
-                  finding.isVerified
-                    ? 'border-slate-200 bg-white shadow-2xs'
-                    : finding.candidateStatus === FindingCandidateStatus.POTENTIAL_NON_COMPLIANCE
-                    ? 'border-rose-200 bg-rose-50/10 shadow-xs'
-                    : finding.candidateStatus === FindingCandidateStatus.REQUIRES_INSPECTOR_REVIEW
-                    ? 'border-amber-200 bg-amber-50/10 shadow-xs'
-                    : 'border-slate-200 bg-white shadow-xs'
-                }`}
-              >
-                <CardContent className="p-4 sm:p-5 space-y-4">
-                  {/* Card Header Row */}
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+          <div className="space-y-6">
+            {/* Smart Option 3 Partition: Action Cards for defects/reviews + Compact Checklist Table for passed */}
+            {filterTab === 'ALL' && !searchQuery.trim() ? (
+              attentionFindings.length === 0 ? (
+                /* All Statutory Rules Compliant / All-Clear State */
+                <div className="space-y-6">
+                  <div className="p-8 rounded-2xl bg-gradient-to-br from-emerald-50 via-teal-50/50 to-blue-50/30 border border-emerald-200 text-center space-y-4 shadow-xs">
+                    <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto shadow-2xs">
+                      <CheckCircle2 className="w-8 h-8" />
+                    </div>
                     <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                          {finding.ruleId}
-                        </span>
-                        <span className="font-bold text-xs text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                          {finding.ruleReference}
-                        </span>
-                        <span className="text-[11px] font-mono text-slate-500">
-                          Unit: {finding.sampleCode}
-                        </span>
-                        <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
-                          {finding.ruleFamily.replace(/_/g, ' ')}
-                        </span>
+                      <div className="inline-block px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold uppercase tracking-wider mb-1">
+                        All Clear &bull; 100% Compliant
                       </div>
-                      <h3 className="text-sm font-bold text-slate-800 pt-0.5">
-                        {finding.declarationType}
+                      <h3 className="text-lg font-bold text-emerald-950">
+                        All {passedFindings.length} Statutory Requirements Compliant!
                       </h3>
+                      <p className="text-xs text-emerald-900 max-w-md mx-auto leading-relaxed">
+                        No package discrepancies, numeral height violations, or missing mandatory declarations were detected for this specimen.
+                      </p>
                     </div>
-
-                    {/* Status Badges */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      {/* Candidate Status Badge */}
-                      <Badge variant={candidateMeta.badgeVariant} size="sm">
-                        Candidate: {candidateMeta.label}
-                      </Badge>
-
-                      {/* Verified Status Badge */}
-                      {finding.isVerified && verifiedMeta && (
-                        <Badge
-                          variant={verifiedMeta.badgeVariant}
+                    <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+                      {passedFindings.some((f) => !f.isVerified) && !isController && (
+                        <Button
+                          variant="outline"
                           size="sm"
-                          icon={<ShieldCheck className="w-3 h-3" />}
+                          disabled={isVerifyingAllPassed}
+                          onClick={handleVerifyAllPassed}
+                          className="bg-white border-emerald-300 text-emerald-800 text-xs shadow-2xs hover:bg-emerald-50 font-semibold"
+                          icon={
+                            isVerifyingAllPassed ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            )
+                          }
                         >
-                          {verifiedMeta.label}
-                        </Badge>
+                          {isVerifyingAllPassed
+                            ? 'Recording...'
+                            : `Confirm & Record All ${passedFindings.filter((f) => !f.isVerified).length} Passed Rules`}
+                        </Button>
                       )}
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => navigate('/inspector/reports')}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs shadow-xs"
+                        icon={<ArrowRight className="w-3.5 h-3.5" />}
+                      >
+                        Proceed to Reports & PDF
+                      </Button>
                     </div>
                   </div>
 
-                  {/* 3-Layer Observation vs Requirement Comparison Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                    {/* Left Column: Visual AI Observation Layer */}
-                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <Eye className="w-3.5 h-3.5 text-slate-500" />
-                          <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                            Visual AI Observation
-                          </span>
-                        </div>
-                        {finding.aiObservation.confidence && (
-                          <span
-                            className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                              finding.aiObservation.confidence === 'HIGH'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : finding.aiObservation.confidence === 'MEDIUM'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-rose-100 text-rose-800'
-                            }`}
-                          >
-                            Confidence: {finding.aiObservation.confidence}
-                          </span>
-                        )}
+                  {/* Clean Compact Checklist Table */}
+                  {renderChecklistTable(
+                    passedFindings,
+                    'Statutory Requirements Checklist',
+                    'All statutory package declarations evaluated compliant under Legal Metrology Rules'
+                  )}
+                </div>
+              ) : (
+                /* Attention Required Section + Passed Table */
+                <div className="space-y-6">
+                  {/* 1. Action Cards for Discrepancies & Non-Compliances */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600" />
+                        <h3 className="text-sm font-bold text-slate-900">
+                          Action Required: Discrepancies & Potential Non-Compliances ({attentionFindings.length})
+                        </h3>
                       </div>
-
-                      {/* Observed Value Box */}
-                      <div className="space-y-1">
-                        <div className="text-[11px] text-slate-500">Observed Value on Package:</div>
-                        <div className="p-2 rounded bg-white border border-slate-200 font-mono text-xs font-semibold text-slate-800 break-words">
-                          {finding.aiObservation.extractedValue ? (
-                            <span>{finding.aiObservation.extractedValue}</span>
-                          ) : (
-                            <span className="text-slate-400 italic">No declaration detected</span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* If Corrected: Show Preserved Original AI Extraction */}
-                      {finding.isCorrected && finding.inspectorVerification.originalAiValuePreserved && (
-                        <div className="p-2 rounded-lg bg-amber-50/70 border border-amber-200 text-[11px] space-y-1">
-                          <div className="flex items-center space-x-1.5 text-amber-800 font-bold">
-                            <RotateCcw className="w-3 h-3 text-amber-600" />
-                            <span>Original AI Extraction Preserved:</span>
-                          </div>
-                          <div className="font-mono text-amber-900 bg-white/70 px-2 py-1 rounded border border-amber-200/50">
-                            {finding.inspectorVerification.originalAiValuePreserved}
-                          </div>
-                          <p className="text-[10px] text-amber-700">
-                            Verified value corrected to: <strong className="font-mono">{finding.inspectorVerification.verifiedValue}</strong>
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Evidence Photo Thumbnails */}
-                      {finding.aiObservation.evidenceImageIds && finding.aiObservation.evidenceImageIds.length > 0 && currentInspection && (
-                        <div className="space-y-1.5 pt-1">
-                          <div className="text-[10px] font-bold text-slate-500 uppercase">
-                            Attached Photo Evidence:
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {finding.aiObservation.evidenceImageIds.map((imgId, idx) => {
-                              const imgUrl = getSampleImageUrl(currentInspection._id, finding.sampleId, imgId);
-                              return (
-                                <button
-                                  key={idx}
-                                  type="button"
-                                  onClick={() =>
-                                    setLightboxImage({
-                                      url: imgUrl,
-                                      title: `Evidence for ${finding.ruleReference}`,
-                                      subtitle: `Declaration: ${finding.declarationType} • Unit: ${finding.sampleCode}`,
-                                    })
-                                  }
-                                  className="group relative w-16 h-16 rounded-lg overflow-hidden border border-slate-200 hover:border-blue-500 transition-colors cursor-pointer"
-                                >
-                                  <img
-                                    src={imgUrl}
-                                    alt="Evidence thumbnail"
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                                  />
-                                  <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
-                                    <Eye className="w-4 h-4" />
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
+                      <span className="text-xs text-slate-500 font-medium">
+                        {attentionFindings.filter((f) => f.isVerified).length} of {attentionFindings.length} verified
+                      </span>
                     </div>
 
-                    {/* Right Column: Statutory Requirement & Deterministic Evaluation */}
-                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 flex flex-col justify-between">
-                      <div className="space-y-2.5">
-                        <div className="flex items-center justify-between">
+                    <div className="space-y-4">
+                      {attentionFindings.map(renderFindingCard)}
+                    </div>
+                  </div>
+
+                  {/* 2. Compact Statutory Checklist Table for Passing Rules */}
+                  {passedFindings.length > 0 &&
+                    renderChecklistTable(
+                      passedFindings,
+                      'Compliant Statutory Declarations',
+                      `${passedFindings.length} statutory requirements met & evaluated compliant under Legal Metrology Rules`
+                    )}
+                </div>
+              )
+            ) : filterTab === 'COMPLIANT_CANDIDATE' ? (
+              /* Compliant Candidates Tab: Clean Compact Table */
+              renderChecklistTable(
+                filteredFindings,
+                'Compliant Statutory Declarations',
+                'Declarations meeting statutory requirements under Legal Metrology Rules'
+              )
+            ) : filterTab === 'VERIFIED' ? (
+              /* Verified Tab: Violations at top if any, then compact table for verified compliant */
+              <div className="space-y-6">
+                {(() => {
+                  const verifiedViolations = filteredFindings.filter(
+                    (f) =>
+                      f.status === FindingStatus.VERIFIED_NON_COMPLIANT ||
+                      f.status === FindingStatus.VERIFIED_REQUIRES_FURTHER_REVIEW
+                  );
+                  const verifiedPassed = filteredFindings.filter(
+                    (f) =>
+                      f.status === FindingStatus.VERIFIED_COMPLIANT ||
+                      (!f.isVerified && f.candidateStatus === FindingCandidateStatus.COMPLIANT_CANDIDATE)
+                  );
+                  return (
+                    <>
+                      {verifiedViolations.length > 0 && (
+                        <div className="space-y-3">
                           <div className="flex items-center space-x-2">
-                            <FileText className="w-3.5 h-3.5 text-slate-500" />
-                            <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                              Statutory Legal Requirement
-                            </span>
+                            <ShieldAlert className="w-4 h-4 text-rose-600" />
+                            <h3 className="text-sm font-bold text-slate-900">
+                              Verified Non-Compliances ({verifiedViolations.length})
+                            </h3>
                           </div>
-                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-semibold">
-                            DB v{finding.ruleEngineResult.ruleDatabaseVersion}
-                          </span>
-                        </div>
-
-                        <p className="text-xs text-slate-700 leading-relaxed font-medium">
-                          {finding.requirementDescription}
-                        </p>
-
-                        <div className="p-2.5 rounded bg-white border border-slate-200 space-y-1">
-                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                            Deterministic Evaluation Reason:
+                          <div className="space-y-4">
+                            {verifiedViolations.map(renderFindingCard)}
                           </div>
-                          <p className="text-xs text-slate-800 font-mono">
-                            {finding.ruleEngineResult.reason || 'Evaluated against statutory package criteria.'}
-                          </p>
-                        </div>
-                      </div>
-
-                      {finding.ruleEngineResult.applicabilityExplanation && (
-                        <div className="text-[11px] text-slate-500 italic">
-                          Scope: {finding.ruleEngineResult.applicabilityExplanation}
                         </div>
                       )}
+                      {verifiedPassed.length > 0 &&
+                        renderChecklistTable(
+                          verifiedPassed,
+                          'Verified Compliant Declarations',
+                          'Statutory requirements verified compliant by field inspector'
+                        )}
+                    </>
+                  );
+                })()}
+              </div>
+            ) : searchQuery.trim() ? (
+              /* Search Results: Partition into Attention Cards vs Compliant Table */
+              <div className="space-y-6">
+                {attentionFindings.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-bold text-slate-900">
+                      Discrepancies Matching Search ({attentionFindings.length})
+                    </h3>
+                    <div className="space-y-4">
+                      {attentionFindings.map(renderFindingCard)}
                     </div>
                   </div>
-
-                  {/* Verification Banner / Record (If already verified) */}
-                  {finding.isVerified && (
-                    <div className="p-3.5 rounded-xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-                      <div className="space-y-1">
-                        <div className="flex items-center space-x-2">
-                          <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                          <span className="text-xs font-bold text-slate-100">
-                            Officer Determination Recorded
-                          </span>
-                          <span className="text-slate-600">•</span>
-                          <span className="text-xs font-mono font-bold text-emerald-400">
-                            {finding.status}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-400">
-                          Verified by: <strong className="text-slate-200">{finding.inspectorVerification.verifiedByName || finding.inspectorVerification.verifiedBy}</strong> on{' '}
-                          {finding.inspectorVerification.verifiedAt
-                            ? new Date(finding.inspectorVerification.verifiedAt).toLocaleString('en-IN')
-                            : 'Unknown date'}
-                        </p>
-                        {finding.inspectorVerification.notes && (
-                          <p className="text-xs text-slate-300 italic pt-0.5">
-                            Note: "{finding.inspectorVerification.notes}"
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Re-verify Button for Inspector */}
-                      {!isController && (
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700 text-xs"
-                            onClick={() =>
-                              handleOpenVerification(
-                                finding,
-                                finding.inspectorVerification.decision || InspectorVerificationDecision.VERIFIED_COMPLIANT
-                              )
-                            }
-                          >
-                            Update Determination
-                          </Button>
-                        </div>
-                      )}
-                    </div>
+                )}
+                {passedFindings.length > 0 &&
+                  renderChecklistTable(
+                    passedFindings,
+                    'Compliant Declarations Matching Search',
+                    `Found ${passedFindings.length} matching parameters`
                   )}
-
-                  {/* Inspector Action Toolbar (If not verified or editing) */}
-                  {!finding.isVerified && (
-                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
-                      {/* Left: Quick Decision Action Buttons */}
-                      <div className="flex flex-wrap items-center gap-2">
-                        {isController ? (
-                          <div className="text-xs text-slate-400 italic">
-                            Verification action restricted to assigned field inspector.
-                          </div>
-                        ) : (
-                          <>
-                            {/* Verify Compliant */}
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
-                              icon={<Check className="w-3.5 h-3.5" />}
-                              onClick={() =>
-                                handleOpenVerification(finding, InspectorVerificationDecision.VERIFIED_COMPLIANT)
-                              }
-                            >
-                              Verify Compliant
-                            </Button>
-
-                            {/* Flag Non-Compliant */}
-                            <Button
-                              variant="danger"
-                              size="sm"
-                              className="text-xs"
-                              icon={<XCircle className="w-3.5 h-3.5" />}
-                              onClick={() =>
-                                handleOpenVerification(
-                                  finding,
-                                  InspectorVerificationDecision.VERIFIED_NON_COMPLIANT
-                                )
-                              }
-                            >
-                              Flag Non-Compliance
-                            </Button>
-
-                            {/* Flag for Review */}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="border-amber-300 text-amber-800 hover:bg-amber-50 text-xs"
-                              icon={<AlertTriangle className="w-3.5 h-3.5 text-amber-600" />}
-                              onClick={() =>
-                                handleOpenVerification(
-                                  finding,
-                                  InspectorVerificationDecision.VERIFIED_REQUIRES_FURTHER_REVIEW
-                                )
-                              }
-                            >
-                              Action Required
-                            </Button>
-
-                            {/* Mark Not Applicable */}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-slate-600 text-xs"
-                              onClick={() =>
-                                handleOpenVerification(
-                                  finding,
-                                  InspectorVerificationDecision.VERIFIED_NOT_APPLICABLE
-                                )
-                              }
-                            >
-                              Mark N/A
-                            </Button>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Right: Value Correction Button */}
-                      {!isController && (
-                        <div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            icon={<Edit3 className="w-3.5 h-3.5 text-blue-600" />}
-                            onClick={() => handleOpenCorrection(finding)}
-                            className="text-xs"
-                          >
-                            Correct Declaration Value
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Verification Dialog Modal */}
-      {verifyingFinding && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150"
-          onClick={() => setVerifyingFinding(null)}
-        >
-          <div
-            className="relative max-w-lg w-full bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-2xl flex flex-col max-h-[90vh]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
-              <div className="flex items-center space-x-2.5">
-                <ShieldCheck className="w-5 h-5 text-blue-600" />
-                <h3 className="text-sm font-bold text-slate-900">
-                  Record Inspector Finding Determination
-                </h3>
               </div>
-              <button
-                onClick={() => setVerifyingFinding(null)}
-                aria-label="Close dialog"
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6 space-y-4 overflow-y-auto">
-              <div>
-                <div className="text-xs text-slate-500">Statutory Check:</div>
-                <div className="text-sm font-bold text-slate-900">
-                  {verifyingFinding.ruleReference} — {verifyingFinding.declarationType}
-                </div>
-                <div className="text-xs font-mono text-blue-700 pt-0.5">
-                  Rule ID: {verifyingFinding.ruleId} • Unit: {verifyingFinding.sampleCode}
-                </div>
+            ) : (
+              /* Potential Non-Compliance or Requires Review Tabs */
+              <div className="space-y-4">
+                {filteredFindings.map(renderFindingCard)}
               </div>
-
-              {/* Decision Radio Selector */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 block">
-                  Verification Decision:
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <label
-                    className={`p-3 rounded-xl border flex items-center space-x-2.5 cursor-pointer text-xs font-semibold ${
-                      verificationDecision === InspectorVerificationDecision.VERIFIED_COMPLIANT
-                        ? 'border-emerald-500 bg-emerald-50/60 text-emerald-900'
-                        : 'border-slate-200 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="decision"
-                      value={InspectorVerificationDecision.VERIFIED_COMPLIANT}
-                      checked={verificationDecision === InspectorVerificationDecision.VERIFIED_COMPLIANT}
-                      onChange={() =>
-                        setVerificationDecision(InspectorVerificationDecision.VERIFIED_COMPLIANT)
-                      }
-                      className="text-emerald-600 focus:ring-emerald-500"
-                    />
-                    <span>Verified Compliant</span>
-                  </label>
-
-                  <label
-                    className={`p-3 rounded-xl border flex items-center space-x-2.5 cursor-pointer text-xs font-semibold ${
-                      verificationDecision === InspectorVerificationDecision.VERIFIED_NON_COMPLIANT
-                        ? 'border-rose-500 bg-rose-50/60 text-rose-900'
-                        : 'border-slate-200 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="decision"
-                      value={InspectorVerificationDecision.VERIFIED_NON_COMPLIANT}
-                      checked={verificationDecision === InspectorVerificationDecision.VERIFIED_NON_COMPLIANT}
-                      onChange={() =>
-                        setVerificationDecision(InspectorVerificationDecision.VERIFIED_NON_COMPLIANT)
-                      }
-                      className="text-rose-600 focus:ring-rose-500"
-                    />
-                    <span>Flag Non-Compliance</span>
-                  </label>
-
-                  <label
-                    className={`p-3 rounded-xl border flex items-center space-x-2.5 cursor-pointer text-xs font-semibold ${
-                      verificationDecision ===
-                      InspectorVerificationDecision.VERIFIED_REQUIRES_FURTHER_REVIEW
-                        ? 'border-amber-500 bg-amber-50/60 text-amber-900'
-                        : 'border-slate-200 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="decision"
-                      value={InspectorVerificationDecision.VERIFIED_REQUIRES_FURTHER_REVIEW}
-                      checked={
-                        verificationDecision ===
-                        InspectorVerificationDecision.VERIFIED_REQUIRES_FURTHER_REVIEW
-                      }
-                      onChange={() =>
-                        setVerificationDecision(
-                          InspectorVerificationDecision.VERIFIED_REQUIRES_FURTHER_REVIEW
-                        )
-                      }
-                      className="text-amber-600 focus:ring-amber-500"
-                    />
-                    <span>Action Required</span>
-                  </label>
-
-                  <label
-                    className={`p-3 rounded-xl border flex items-center space-x-2.5 cursor-pointer text-xs font-semibold ${
-                      verificationDecision === InspectorVerificationDecision.VERIFIED_NOT_APPLICABLE
-                        ? 'border-slate-500 bg-slate-100 text-slate-900'
-                        : 'border-slate-200 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="decision"
-                      value={InspectorVerificationDecision.VERIFIED_NOT_APPLICABLE}
-                      checked={verificationDecision === InspectorVerificationDecision.VERIFIED_NOT_APPLICABLE}
-                      onChange={() =>
-                        setVerificationDecision(InspectorVerificationDecision.VERIFIED_NOT_APPLICABLE)
-                      }
-                      className="text-slate-600 focus:ring-slate-500"
-                    />
-                    <span>Not Applicable / Exempt</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Verified Value Input */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 block">
-                  Verified Declaration Text:
-                </label>
-                <input
-                  type="text"
-                  value={verificationValueInput}
-                  onChange={(e) => setVerificationValueInput(e.target.value)}
-                  placeholder="Enter or confirm verified text..."
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 font-mono text-slate-900 focus:outline-hidden focus:border-blue-500"
-                />
-                <p className="text-[10px] text-slate-400">
-                  Original AI extraction ({verifyingFinding.aiObservation.extractedValue || 'None'}) remains preserved in the audit trail.
-                </p>
-              </div>
-
-              {/* Inspector Notes */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 block">
-                  Inspector Notes / Justification:
-                </label>
-                <textarea
-                  rows={3}
-                  value={verificationNotesInput}
-                  onChange={(e) => setVerificationNotesInput(e.target.value)}
-                  placeholder="e.g., Physical examination confirmed correct generic name in principal display panel..."
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 text-slate-900 focus:outline-hidden focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex items-center justify-end space-x-3 px-6 py-4 border-t border-slate-100 bg-slate-50">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setVerifyingFinding(null)}
-                disabled={isSubmittingVerification}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleSubmitVerification}
-                disabled={isSubmittingVerification}
-                icon={
-                  isSubmittingVerification ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Check className="w-3.5 h-3.5" />
-                  )
-                }
-              >
-                {isSubmittingVerification ? 'Saving Verification...' : 'Confirm Determination'}
-              </Button>
-            </div>
+            )}
           </div>
-        </div>
       )}
 
       {/* Value Correction Modal */}

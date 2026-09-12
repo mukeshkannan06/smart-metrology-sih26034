@@ -37,7 +37,23 @@ export const createApp = (): Express => {
   app.use(express.urlencoded({ extended: true, limit: '25mb' }));
   app.use(cookieParser());
 
-  // 5. API Routes (/api/...)
+  // 5. Root Ping & Service Status
+  app.get('/', (_req, res) => {
+    res.json({
+      success: true,
+      service: 'Smart Metrology Backend API (Legal Metrology)',
+      status: 'OPERATIONAL',
+      message: 'Backend server is running healthy. Access the web user application at http://localhost:5173',
+      endpoints: {
+        health: '/api/health',
+        inspections: '/api/inspections',
+        findings: '/api/findings',
+      },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // 6. API Routes (/api/...)
   app.use('/api', apiRouter);
 
   // 6. 404 Route Not Found Handler

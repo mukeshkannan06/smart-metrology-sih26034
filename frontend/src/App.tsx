@@ -10,7 +10,6 @@ import { InspectorDashboard } from './pages/inspector/InspectorDashboard';
 import { NewInspectionPage } from './pages/inspector/NewInspectionPage';
 import { InspectionWorkspace } from './pages/inspector/InspectionWorkspace';
 import { SampleWorkspace } from './pages/inspector/SampleWorkspace';
-import { ScanCapturePackage } from './pages/inspector/ScanCapturePackage';
 import { MyInspections } from './pages/inspector/MyInspections';
 import { InspectionHistory } from './pages/inspector/InspectionHistory';
 import { ComplianceFindings } from './pages/inspector/ComplianceFindings';
@@ -70,7 +69,7 @@ export const App: React.FC = () => {
                     path="inspections/:inspectionId/samples/:sampleId"
                     element={<SampleWorkspace />}
                   />
-                  <Route path="scan-capture" element={<ScanCapturePackage />} />
+                  <Route path="scan-capture" element={<Navigate to="/inspector/new-inspection" replace />} />
                   <Route path="my-inspections" element={<MyInspections />} />
                   <Route path="history" element={<InspectionHistory />} />
                   <Route path="findings" element={<ComplianceFindings />} />

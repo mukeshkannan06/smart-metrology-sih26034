@@ -3,7 +3,6 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   PlusCircle,
-  Camera,
   FolderCheck,
   History,
   CheckSquare,
@@ -42,7 +41,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const inspectorNavItems: NavEntry[] = [
     { name: 'Dashboard', path: '/inspector/dashboard', icon: LayoutDashboard },
     { name: 'New Inspection', path: '/inspector/new-inspection', icon: PlusCircle, highlight: true },
-    { name: 'Scan / Capture Package', path: '/inspector/scan-capture', icon: Camera },
     { name: 'My Inspections', path: '/inspector/my-inspections', icon: FolderCheck },
     { name: 'Inspection History', path: '/inspector/history', icon: History },
     { name: 'Compliance Findings', path: '/inspector/findings', icon: CheckSquare },

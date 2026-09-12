@@ -5,7 +5,6 @@ import {
   Clock,
   CheckCircle2,
   PlusCircle,
-  Camera,
   BookOpen,
   Calendar,
   Loader2,
@@ -212,10 +211,10 @@ export const InspectorDashboard: React.FC = () => {
             <Button
               variant="outline"
               size="sm"
-              icon={<Camera className="w-4 h-4 text-blue-600" />}
-              onClick={() => navigate('/inspector/scan-capture')}
+              icon={<FolderCheck className="w-4 h-4 text-blue-600" />}
+              onClick={() => navigate('/inspector/my-inspections')}
             >
-              Scan Package
+              My Inspections
             </Button>
             <Button
               variant="primary"
