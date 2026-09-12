@@ -12,7 +12,12 @@ import {
   BarChart2,
   Clock,
   BookOpen,
-  FolderCheck,
+  Filter,
+  Eye,
+  FileText,
+  AlertTriangle,
+  CheckCircle2,
+  Package,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -25,6 +30,9 @@ import {
   PieChart,
   Pie,
   Cell,
+  LineChart,
+  Line,
+  Legend,
 } from 'recharts';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { DashboardCard } from '../../components/ui/DashboardCard';
@@ -35,15 +43,26 @@ import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { useAuth } from '../../context/AuthContext';
 import {
-  fetchControllerDashboard,
-  ControllerDashboardData,
-} from '../../services/dashboardService';
+  fetchAnalyticsOverview,
+  AnalyticsOverviewData,
+  AnalyticsFilterParams,
+} from '../../services/analyticsService';
+
+const TIME_RANGES = [
+  { value: 'today', label: 'Today' },
+  { value: '7d', label: 'Last 7 Days' },
+  { value: '30d', label: 'Last 30 Days' },
+  { value: '90d', label: 'Last 90 Days' },
+  { value: 'this_year', label: 'This Year' },
+  { value: 'all', label: 'All Time' },
+];
 
 export const ControllerDashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [dashboardData, setDashboardData] = useState<ControllerDashboardData | null>(null);
+  const [timeRange, setTimeRange] = useState<AnalyticsFilterParams['timeRange']>('30d');
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsOverviewData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,145 +70,21 @@ export const ControllerDashboard: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await fetchControllerDashboard();
-      setDashboardData(data);
+      const data = await fetchAnalyticsOverview({ timeRange });
+      setAnalyticsData(data);
     } catch (err: any) {
       console.error('[CONTROLLER_DASHBOARD] Failed to load:', err);
-      setError(err.message || 'Unable to load supervisory dashboard.');
+      setError(err.message || 'Unable to load supervisory analytics.');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [timeRange]);
 
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
 
-  // Inspector Roster Table Columns
-  const inspectorColumns: Column<ControllerDashboardData['inspectorActivity'][0]>[] = [
-    {
-      header: 'Badge ID',
-      accessor: 'badgeNumber',
-      render: (row) => (
-        <span className="font-mono font-bold text-blue-700">{row.badgeNumber}</span>
-      ),
-    },
-    {
-      header: 'Field Officer Name',
-      render: (row) => (
-        <div className="flex items-center space-x-2">
-          <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center font-bold text-xs text-slate-700">
-            {row.name.split(' ').map((n) => n[0]).join('')}
-          </div>
-          <div>
-            <div className="font-semibold text-slate-800">{row.name}</div>
-            <div className="text-[10px] font-mono text-slate-400">@{row.username}</div>
-          </div>
-        </div>
-      ),
-    },
-    {
-      header: 'Total Inspections',
-      accessor: 'totalInspections',
-      render: (row) => <span className="font-bold text-slate-800">{row.totalInspections}</span>,
-    },
-    {
-      header: 'In Progress',
-      accessor: 'inProgress',
-      render: (row) => (
-        <span className="font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-xs">
-          {row.inProgress} active
-        </span>
-      ),
-    },
-    {
-      header: 'Completed',
-      accessor: 'completed',
-      render: (row) => (
-        <span className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-xs">
-          {row.completed} verified
-        </span>
-      ),
-    },
-    {
-      header: 'Status',
-      render: (row) => (
-        <Badge variant={row.status === 'ACTIVE' ? 'success' : 'neutral'}>
-          {row.status === 'ACTIVE' ? 'Active Duty' : 'Inactive'}
-        </Badge>
-      ),
-    },
-  ];
-
-  // Recent Global Inspections Table Columns
-  const inspectionColumns: Column<ControllerDashboardData['recentInspections'][0]>[] = [
-    {
-      header: 'Inspection ID',
-      accessor: 'inspectionNumber',
-      render: (row) => (
-        <span className="font-mono font-bold text-blue-700 tracking-wide">{row.inspectionNumber}</span>
-      ),
-    },
-    {
-      header: 'Field Inspector',
-      render: (row) => (
-        <div>
-          <div className="font-semibold text-slate-800">{row.inspectorName}</div>
-          <div className="text-[10px] font-mono text-slate-400">{row.inspectorBadge}</div>
-        </div>
-      ),
-    },
-    {
-      header: 'Commodity / Product',
-      render: (row) => (
-        <div>
-          <div className="font-medium text-slate-800">{row.commodity}</div>
-          {row.brand && <div className="text-[11px] text-slate-400">{row.brand}</div>}
-        </div>
-      ),
-    },
-    {
-      header: 'Package Context',
-      accessor: 'packageContext',
-      render: (row) => (
-        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-          {row.packageContext.replace(/_/g, ' ')}
-        </span>
-      ),
-    },
-    {
-      header: 'Market / Location',
-      render: (row) => (
-        <div className="text-xs text-slate-600">
-          <div>{row.location}</div>
-          {row.market && <div className="text-[10px] text-slate-400">{row.market}</div>}
-        </div>
-      ),
-    },
-    {
-      header: 'Status',
-      render: (row) => {
-        if (row.status === 'COMPLETED') {
-          return <Badge variant="success">Completed</Badge>;
-        }
-        if (row.status === 'IN_PROGRESS') {
-          return <Badge variant="warning">In Progress</Badge>;
-        }
-        return <Badge variant="neutral">Archived</Badge>;
-      },
-    },
-    {
-      header: 'Date',
-      render: (row) => (
-        <span className="inline-flex items-center space-x-1 text-xs text-slate-500">
-          <Calendar className="w-3 h-3 text-slate-400" />
-          <span>{new Date(row.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-        </span>
-      ),
-    },
-  ];
-
-  if (isLoading) {
+  if (isLoading && !analyticsData) {
     return (
       <div className="space-y-6">
         <PageHeader
@@ -206,12 +101,12 @@ export const ControllerDashboard: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (error && !analyticsData) {
     return (
       <div className="space-y-6">
         <PageHeader
           title="Supervisory Dashboard"
-          subtitle={`${user?.name || 'Dr. Vikram Singh'} — Assistant Controller of Legal Metrology`}
+          subtitle={`${user?.name || 'Assistant Controller'} — Assistant Controller of Legal Metrology`}
           badge={<Badge variant="purple">Supervisory Authority</Badge>}
         />
         <div className="p-6 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -230,28 +125,35 @@ export const ControllerDashboard: React.FC = () => {
     );
   }
 
-  const summary = dashboardData?.summary || {
-    totalInspectors: 0,
+  const summary = analyticsData?.summary || {
     totalInspections: 0,
-    inProgress: 0,
-    completed: 0,
-    archived: 0,
+    activeInspections: 0,
+    completedInspections: 0,
+    requiresReviewInspections: 0,
     totalSamples: 0,
-    totalRules: 0,
+    totalFindings: 0,
+    verifiedFindings: 0,
+    pendingFindings: 0,
+    verifiedCompliantCount: 0,
+    verifiedNonCompliantCount: 0,
+    verifiedNotApplicableCount: 0,
+    verifiedRequiresReviewCount: 0,
+    officerCorrectionsCount: 0,
+    overallComplianceRate: 100,
   };
 
-  const inspectorActivity = dashboardData?.inspectorActivity || [];
-  const recentInspections = dashboardData?.recentInspections || [];
-  const statusCharts = dashboardData?.charts.statusDistribution || [];
-  const contextCharts = dashboardData?.charts.contextDistribution || [];
-  const workloadCharts = dashboardData?.charts.inspectorWorkload || [];
+  const activityTrend = analyticsData?.trends.inspectionActivity || [];
+  const statusCharts = analyticsData?.charts.statusDistribution || [];
+  const contextCharts = analyticsData?.charts.packageContextDistribution || [];
+  const workloadCharts = analyticsData?.charts.inspectorWorkload || [];
+  const attentionRequired = analyticsData?.attentionRequired || [];
 
   return (
     <div className="space-y-6">
       {/* Supervisory Header */}
       <PageHeader
         title="Supervisory Dashboard"
-        subtitle={`${dashboardData?.officer.name || user?.name} — Assistant Controller of Legal Metrology &bull; State Jurisdiction HQ`}
+        subtitle={`${user?.name || 'Dr. Vikram Singh'} — Assistant Controller of Legal Metrology • State Jurisdiction HQ`}
         badge={<Badge variant="purple">Supervisory Authority</Badge>}
         actions={
           <div className="flex items-center space-x-2">
@@ -275,77 +177,228 @@ export const ControllerDashboard: React.FC = () => {
         }
       />
 
-      {/* Real Data Notice */}
-      <div className="p-3 bg-purple-50/70 border border-purple-200/80 rounded-xl text-xs text-purple-900 flex items-center justify-between">
+      {/* Real-Time Filter Toolbar */}
+      <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
         <div className="flex items-center space-x-2">
-          <span className="px-2 py-0.5 bg-purple-700 text-white font-bold rounded text-[10px] uppercase tracking-wider">
-            Supervisory Jurisdiction Telemetry
+          <Filter className="w-4 h-4 text-purple-600" />
+          <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+            Time Horizon:
           </span>
-          <span>
-            Real-time aggregate data across all active field officers derived directly from MongoDB Atlas.
-          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {TIME_RANGES.map((r) => (
+              <button
+                key={r.value}
+                onClick={() => setTimeRange(r.value as any)}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
+                  timeRange === r.value
+                    ? 'bg-purple-700 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <span className="text-[11px] font-mono text-purple-700 font-semibold hidden md:inline">
-          MongoDB Atlas &bull; Live Aggregations
-        </span>
+
+        <div className="flex items-center space-x-3 text-xs text-slate-500">
+          <span className="hidden sm:inline">
+            Scope: <strong className="text-purple-800">{analyticsData?.filtersApplied.timeRange}</strong>
+          </span>
+          <button
+            onClick={loadDashboard}
+            disabled={isLoading}
+            className="p-1.5 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+            title="Refresh analytics"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-purple-600' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {/* Supervisory Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <DashboardCard
-          title="Field Inspectors"
-          value={summary.totalInspectors}
-          badge="Enrolled"
-          subtext="Active in jurisdiction"
-          icon={<Users className="w-5 h-5 text-purple-600" />}
-          theme="indigo"
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5">
         <DashboardCard
           title="Total Inspections"
           value={summary.totalInspections}
           badge="Jurisdiction"
-          subtext="Combined enforcement total"
+          subtext="Conducted in scope"
           icon={<ShieldCheck className="w-5 h-5 text-blue-600" />}
           theme="blue"
         />
         <DashboardCard
           title="In Progress"
-          value={summary.inProgress}
-          badge="On Field"
-          subtext="Active field examinations"
+          value={summary.activeInspections}
+          badge="Active"
+          subtext="On-field evaluations"
           icon={<Clock className="w-5 h-5 text-amber-600" />}
           theme="amber"
         />
         <DashboardCard
           title="Completed"
-          value={summary.completed}
+          value={summary.completedInspections}
           badge="Concluded"
           subtext="Verified compliance files"
           icon={<FileCheck2 className="w-5 h-5 text-emerald-600" />}
           theme="emerald"
         />
         <DashboardCard
-          title="Statutory Rules"
-          value={summary.totalRules}
-          badge="LMPC 2011"
-          subtext="Active statutory provisions"
-          icon={<BookOpen className="w-5 h-5 text-slate-600" />}
+          title="Samples Evaluated"
+          value={summary.totalSamples}
+          badge="Units"
+          subtext="Child specimens inspected"
+          icon={<Package className="w-5 h-5 text-purple-600" />}
+          theme="indigo"
+        />
+        <DashboardCard
+          title="Statutory Findings"
+          value={summary.totalFindings}
+          badge="Observations"
+          subtext={`${summary.pendingFindings} pending review`}
+          icon={<AlertTriangle className="w-5 h-5 text-indigo-600" />}
           theme="slate"
+        />
+        <DashboardCard
+          title="Verified Findings"
+          value={summary.verifiedFindings}
+          badge={`${summary.overallComplianceRate}% Rate`}
+          subtext={`${summary.verifiedNonCompliantCount} violations`}
+          icon={<CheckCircle2 className="w-5 h-5 text-emerald-600" />}
+          theme="emerald"
         />
       </div>
 
-      {/* Recharts Visual Analytics Grid */}
+      {/* Primary Analytics Grid: Throughput Trend & Context Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Inspector Workload Distribution */}
+        {/* Inspection Activity Trend Over Time */}
         <div className="lg:col-span-2">
           <Card>
             <CardHeader
-              title="Field Inspector Workload Comparison"
-              subtitle="Total inspection packages processed per enrolled officer in jurisdiction"
+              title="Inspection & Statutory Finding Activity"
+              subtitle="Chronological volume of packages inspected and findings logged"
               action={
-                <span className="text-[11px] text-slate-400 font-mono bg-slate-100 px-2 py-0.5 rounded">
-                  Live Workload
+                <span className="text-[11px] text-purple-700 font-mono bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                  {analyticsData?.filtersApplied.timeRange}
                 </span>
+              }
+            />
+            <CardContent className="h-72">
+              {activityTrend.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 bg-slate-50/50 rounded-xl">
+                  <BarChart2 className="w-8 h-8 text-slate-300 mb-2" />
+                  <div className="text-xs text-slate-400">
+                    No inspection data available for the selected filters.
+                  </div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={activityTrend} margin={{ top: 10, right: 15, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#64748B' }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#64748B' }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1E293B',
+                        borderRadius: '8px',
+                        color: '#F8FAFC',
+                        fontSize: '12px',
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+                    <Line
+                      type="monotone"
+                      dataKey="inspections"
+                      name="Inspections"
+                      stroke="#2563EB"
+                      strokeWidth={2.5}
+                      dot={{ r: 3 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="findings"
+                      name="Findings"
+                      stroke="#7C3AED"
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="violations"
+                      name="Violations"
+                      stroke="#E11D48"
+                      strokeWidth={2}
+                      strokeDasharray="4 4"
+                      dot={{ r: 3 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Package Context Distribution */}
+        <div>
+          <Card>
+            <CardHeader
+              title="Statutory Package Context"
+              subtitle="Distribution across canonical packaging classifications"
+            />
+            <CardContent className="h-72">
+              {contextCharts.every((c) => c.count === 0) ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 bg-slate-50/50 rounded-xl">
+                  <div className="text-xs text-slate-400">
+                    No packaging context data recorded.
+                  </div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={contextCharts}
+                    layout="vertical"
+                    margin={{ top: 10, right: 20, left: 10, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: '#64748B' }} />
+                    <YAxis
+                      type="category"
+                      dataKey="label"
+                      tick={{ fontSize: 9, fill: '#475569' }}
+                      width={110}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1E293B',
+                        borderRadius: '8px',
+                        color: '#FFF',
+                        fontSize: '11px',
+                      }}
+                    />
+                    <Bar dataKey="count" name="Inspections" fill="#8B5CF6" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Secondary Analytics Grid: Inspector Workload & Status Breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Field Inspector Workload */}
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader
+              title="Field Officer Activity Comparison"
+              subtitle="Inspection packages, samples, and findings logged by enrolled inspectors"
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/controller/inspectors')}
+                >
+                  View Full Roster
+                </Button>
               }
             />
             <CardContent className="h-72">
@@ -356,10 +409,10 @@ export const ControllerDashboard: React.FC = () => {
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={workloadCharts} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <BarChart data={workloadCharts} margin={{ top: 10, right: 15, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748B' }} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748B' }} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748B' }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#64748B' }} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: '#1E293B',
@@ -368,7 +421,10 @@ export const ControllerDashboard: React.FC = () => {
                         fontSize: '12px',
                       }}
                     />
-                    <Bar dataKey="inspections" name="Inspections Logged" fill="#7C3AED" radius={[4, 4, 0, 0]} />
+                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+                    <Bar dataKey="inspections" name="Inspections" fill="#2563EB" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="samples" name="Samples" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="findings" name="Findings" fill="#F59E0B" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -376,12 +432,12 @@ export const ControllerDashboard: React.FC = () => {
           </Card>
         </div>
 
-        {/* Status Distribution Pie Chart */}
+        {/* Inspection Status Breakdown */}
         <div>
           <Card>
             <CardHeader
               title="Inspection Status Breakdown"
-              subtitle="Statewide ratio of in-progress vs completed files"
+              subtitle="Statewide ratio of completed, in-progress, and archived files"
             />
             <CardContent className="h-72 flex flex-col items-center justify-center">
               {statusCharts.length === 0 ? (
@@ -398,9 +454,9 @@ export const ControllerDashboard: React.FC = () => {
                         nameKey="name"
                         cx="50%"
                         cy="50%"
-                        outerRadius={70}
-                        innerRadius={40}
-                        paddingAngle={5}
+                        innerRadius={50}
+                        outerRadius={75}
+                        paddingAngle={4}
                       >
                         {statusCharts.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
@@ -410,18 +466,20 @@ export const ControllerDashboard: React.FC = () => {
                         contentStyle={{
                           backgroundColor: '#1E293B',
                           borderRadius: '8px',
-                          color: '#F8FAFC',
-                          fontSize: '12px',
+                          color: '#FFF',
+                          fontSize: '11px',
                         }}
                       />
                     </PieChart>
                   </ResponsiveContainer>
-                  <div className="flex flex-wrap justify-center gap-3 text-xs mt-2">
-                    {statusCharts.map((entry, idx) => (
-                      <span key={idx} className="flex items-center space-x-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-                        <span className="text-slate-600">{entry.name}: <strong>{entry.value}</strong></span>
-                      </span>
+                  <div className="flex flex-wrap items-center justify-center gap-3 mt-2 text-xs">
+                    {statusCharts.map((item) => (
+                      <div key={item.name} className="flex items-center space-x-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                        <span className="text-slate-600 font-medium">
+                          {item.name}: <strong className="text-slate-900">{item.value}</strong>
+                        </span>
+                      </div>
                     ))}
                   </div>
                 </>
@@ -431,64 +489,83 @@ export const ControllerDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Field Inspector Roster */}
+      {/* Attention Required Section */}
       <Card>
         <CardHeader
-          title="Enrolled Field Inspectors"
-          subtitle="Supervisory roster of Legal Metrology enforcement officers under your authority"
+          title="Attention Required — Inspections with Outstanding Findings or Violations"
+          subtitle="Direct supervisor visibility into cases requiring officer verification or enforcement review"
           action={
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigate('/controller/inspectors')}
-              className="text-xs"
+              onClick={() => navigate('/controller/inspections')}
             >
-              Manage Inspectors
+              All Inspections
             </Button>
           }
         />
         <CardContent className="p-0">
-          <Table
-            columns={inspectorColumns}
-            data={inspectorActivity}
-            keyExtractor={(row) => row.id}
-          />
-        </CardContent>
-      </Card>
-
-      {/* Recent Statewide Inspections Table */}
-      <Card>
-        <CardHeader
-          title="Recent Statewide Inspections"
-          subtitle="Latest packaged commodity inspection reports across all assigned zones"
-          action={
-            recentInspections.length > 0 ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate('/controller/inspections')}
-                className="text-xs"
-              >
-                View All Inspections
-              </Button>
-            ) : undefined
-          }
-        />
-        <CardContent className="p-0">
-          {recentInspections.length > 0 ? (
-            <Table
-              columns={inspectionColumns}
-              data={recentInspections}
-              keyExtractor={(row) => row.id}
-            />
+          {attentionRequired.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 text-xs">
+              All inspected packages in the selected horizon have been verified with zero outstanding issues.
+            </div>
           ) : (
-            <div className="p-8">
-              <EmptyState
-                icon={<FolderCheck className="w-7 h-7 text-purple-600" />}
-                badge="Supervisory Empty State"
-                title="No Inspections Logged Statewide"
-                description="No field inspections have been created in the database yet. When inspectors log inspections, they will appear here in real time."
-              />
+            <div className="divide-y divide-slate-100">
+              {attentionRequired.map((item) => (
+                <div
+                  key={item.inspectionId}
+                  className="p-4 hover:bg-slate-50/80 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-3"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-mono text-xs font-bold text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                        {item.inspectionNumber}
+                      </span>
+                      <span className="font-semibold text-xs text-slate-900">{item.commodity}</span>
+                      {item.brand && <span className="text-[11px] text-slate-400">({item.brand})</span>}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                      <span>Officer: <strong className="text-slate-700">{item.inspectorName}</strong></span>
+                      <span>•</span>
+                      <span>Context: <strong className="text-slate-700">{item.packageContext.replace(/_/g, ' ')}</strong></span>
+                      <span>•</span>
+                      <span>Logged: {new Date(item.createdAt).toLocaleDateString('en-IN')}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3">
+                    {item.violationsCount > 0 && (
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-1 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs font-bold">
+                        <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
+                        <span>{item.violationsCount} Violation{item.violationsCount > 1 ? 's' : ''}</span>
+                      </span>
+                    )}
+                    {item.pendingFindingsCount > 0 && (
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-xs font-semibold">
+                        <Clock className="w-3.5 h-3.5 text-amber-600" />
+                        <span>{item.pendingFindingsCount} Pending</span>
+                      </span>
+                    )}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={<Eye className="w-3.5 h-3.5" />}
+                      onClick={() => navigate(`/controller/inspections/${item.inspectionId}`)}
+                    >
+                      Audit Record
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={<FileText className="w-3.5 h-3.5" />}
+                      onClick={() => navigate(`/controller/generate-pdf/${item.inspectionId}`)}
+                    >
+                      PDF
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
@@ -496,4 +573,3 @@ export const ControllerDashboard: React.FC = () => {
     </div>
   );
 };
-export default ControllerDashboard;

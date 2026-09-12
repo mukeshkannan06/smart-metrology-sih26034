@@ -8,6 +8,7 @@ import ruleEngineRoutes from './ruleEngine.routes';
 import findingRoutes from './finding.routes';
 import historyRoutes from './history.routes';
 import reportRoutes from './report.routes';
+import analyticsRoutes from './analytics.routes';
 
 const apiRouter = Router();
 
@@ -37,6 +38,9 @@ apiRouter.use('/history', historyRoutes);
 
 // Mount Consolidated Inspection Reports endpoints (/api/reports/...)
 apiRouter.use('/reports', reportRoutes);
+
+// Mount Supervisory Analytics endpoints (/api/analytics/...)
+apiRouter.use('/analytics', analyticsRoutes);
 
 export default apiRouter;
 

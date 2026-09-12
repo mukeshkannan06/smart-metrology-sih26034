@@ -55,6 +55,7 @@ export const InspectionHistoryDetail: React.FC = () => {
 
   // Selected sample for filtering observations/findings
   const [selectedSampleId, setSelectedSampleId] = useState<string>('ALL');
+  const [findingScope, setFindingScope] = useState<'APPLICABLE' | 'EXEMPT' | 'ALL'>('APPLICABLE');
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
@@ -98,10 +99,31 @@ export const InspectionHistoryDetail: React.FC = () => {
 
   const { inspection, samples, extractions, ruleEvaluations, findings, auditTrail, summary } = data;
 
-  const filteredFindings =
+  const isExemptFinding = (f: HistoricalFinding) => {
+    const cStatus = f.candidateStatus;
+    const status = f.status;
+    const decision = f.inspectorVerification?.decision;
+    return (
+      cStatus === 'NOT_APPLICABLE' ||
+      status === 'NOT_APPLICABLE' ||
+      status === 'VERIFIED_NOT_APPLICABLE' ||
+      decision === 'VERIFIED_NOT_APPLICABLE'
+    );
+  };
+
+  const sampleScopedFindings =
     selectedSampleId === 'ALL'
       ? findings
       : findings.filter((f) => f.sampleId === selectedSampleId);
+
+  const applicableFindingsCount = sampleScopedFindings.filter((f) => !isExemptFinding(f)).length;
+  const exemptFindingsCount = sampleScopedFindings.filter((f) => isExemptFinding(f)).length;
+
+  const filteredFindings = sampleScopedFindings.filter((f) => {
+    if (findingScope === 'APPLICABLE') return !isExemptFinding(f);
+    if (findingScope === 'EXEMPT') return isExemptFinding(f);
+    return true;
+  });
 
   const formatDateTime = (dateStr?: string | Date | null) => {
     if (!dateStr) return 'N/A';
@@ -190,12 +212,18 @@ export const InspectionHistoryDetail: React.FC = () => {
             <div className="text-base font-bold text-slate-800 mt-0.5">
               {summary.samplesVerified} / {summary.totalSamples} Units
             </div>
+            <div className="text-[10px] text-emerald-600 font-medium">
+              {summary.samplesVerified === summary.totalSamples ? '100% Examined' : `${summary.samplesVerified} of ${summary.totalSamples} Units`}
+            </div>
           </div>
 
           <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80">
-            <div className="text-[10px] text-slate-500 font-medium">Findings Verified</div>
+            <div className="text-[10px] text-slate-500 font-medium">Applicable Findings</div>
             <div className="text-base font-bold text-slate-800 mt-0.5">
-              {summary.percentVerified}% ({summary.verifiedFindings}/{summary.totalFindings})
+              {summary.percentVerified}% ({summary.verifiedFindings}/{summary.totalApplicableFindings ?? summary.totalFindings})
+            </div>
+            <div className="text-[10px] text-slate-500 font-medium">
+              {summary.exemptFindingsCount ?? exemptFindingsCount} Rules Exempt/NA
             </div>
           </div>
 
@@ -204,12 +232,18 @@ export const InspectionHistoryDetail: React.FC = () => {
             <div className="text-base font-bold text-emerald-700 mt-0.5">
               {summary.overallComplianceRate}%
             </div>
+            <div className="text-[10px] text-emerald-600 font-medium">
+              {summary.compliantFindings} Verified Compliant
+            </div>
           </div>
 
           <div className="bg-red-50/70 p-2.5 rounded-lg border border-red-200/70">
             <div className="text-[10px] text-red-700 font-medium">Violations</div>
             <div className="text-base font-bold text-red-700 mt-0.5">
               {summary.nonCompliantFindings} Detected
+            </div>
+            <div className="text-[10px] text-red-600 font-medium">
+              {summary.nonCompliantFindings > 0 ? 'Infraction Flagged' : 'Zero Violations'}
             </div>
           </div>
 
@@ -218,15 +252,16 @@ export const InspectionHistoryDetail: React.FC = () => {
             <div className="text-base font-bold text-amber-700 mt-0.5">
               {summary.correctedObservationsCount} Corrected
             </div>
+            <div className="text-[10px] text-amber-600 font-medium">Human Validation</div>
           </div>
 
-          <div className="bg-blue-50/70 p-2.5 rounded-lg border border-blue-200/70">
-            <div className="text-[10px] text-blue-700 font-medium">Audit Status</div>
-            <div className="text-xs font-bold text-blue-700 mt-1 flex items-center space-x-1">
+          <div className={summary.isFullyAudited ? "bg-emerald-50/70 p-2.5 rounded-lg border border-emerald-200/70" : "bg-blue-50/70 p-2.5 rounded-lg border border-blue-200/70"}>
+            <div className={`text-[10px] font-medium ${summary.isFullyAudited ? 'text-emerald-700' : 'text-blue-700'}`}>Audit Status</div>
+            <div className={`text-xs font-bold mt-1 flex items-center space-x-1 ${summary.isFullyAudited ? 'text-emerald-800' : 'text-blue-700'}`}>
               {summary.isFullyAudited ? (
                 <>
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Fully Audited</span>
+                  <span>Fully Audited (100%)</span>
                 </>
               ) : (
                 <>
@@ -234,6 +269,9 @@ export const InspectionHistoryDetail: React.FC = () => {
                   <span>Pending Final</span>
                 </>
               )}
+            </div>
+            <div className="text-[10px] text-slate-500 font-medium mt-0.5">
+              {summary.isFullyAudited ? 'All Applicable Closed' : 'Incomplete Verification'}
             </div>
           </div>
         </div>
@@ -414,23 +452,61 @@ export const InspectionHistoryDetail: React.FC = () => {
               title="Pillars 4 & 5 — Inspector Correction & Statutory Verification Record"
               subtitle="Officer-verified compliance determinations with side-by-side comparison of original AI extraction vs officer-verified values"
               action={
-                samples.length > 1 ? (
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs text-slate-500 font-medium">Filter Sample:</span>
-                    <select
-                      value={selectedSampleId}
-                      onChange={(e) => setSelectedSampleId(e.target.value)}
-                      className="px-2.5 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => setFindingScope('APPLICABLE')}
+                      className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                        findingScope === 'APPLICABLE'
+                          ? 'bg-white text-blue-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
                     >
-                      <option value="ALL">All Samples ({samples.length})</option>
-                      {samples.map((s) => (
-                        <option key={s._id} value={s._id}>
-                          {s.sampleCode} (#{s.sampleNumber})
-                        </option>
-                      ))}
-                    </select>
+                      Applicable ({applicableFindingsCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFindingScope('EXEMPT')}
+                      className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                        findingScope === 'EXEMPT'
+                          ? 'bg-white text-slate-800 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Exempt / N/A ({exemptFindingsCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFindingScope('ALL')}
+                      className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                        findingScope === 'ALL'
+                          ? 'bg-white text-slate-800 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      All Rules ({sampleScopedFindings.length})
+                    </button>
                   </div>
-                ) : undefined
+
+                  {samples.length > 1 && (
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs text-slate-500 font-medium">Sample:</span>
+                      <select
+                        value={selectedSampleId}
+                        onChange={(e) => setSelectedSampleId(e.target.value)}
+                        className="px-2.5 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="ALL">All Units ({samples.length})</option>
+                        {samples.map((s) => (
+                          <option key={s._id} value={s._id}>
+                            {s.sampleCode} (#{s.sampleNumber})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
               }
             />
             <CardContent className="p-0">
@@ -500,8 +576,8 @@ export const InspectionHistoryDetail: React.FC = () => {
                                 <Badge variant="success">Verified Compliant</Badge>
                               ) : f.status === 'VERIFIED_NON_COMPLIANT' ? (
                                 <Badge variant="danger">Non-Compliant</Badge>
-                              ) : f.status === 'VERIFIED_NOT_APPLICABLE' ? (
-                                <Badge variant="neutral">Not Applicable</Badge>
+                              ) : f.status === 'VERIFIED_NOT_APPLICABLE' || isExemptFinding(f) ? (
+                                <Badge variant="neutral">Exempt / Not Applicable</Badge>
                               ) : f.status === 'VERIFIED_REQUIRES_FURTHER_REVIEW' ? (
                                 <Badge variant="warning">Requires Review</Badge>
                               ) : (

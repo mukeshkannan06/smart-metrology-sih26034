@@ -352,7 +352,7 @@ export const InspectionHistory: React.FC = () => {
                           <div>{getStatusBadge(item.status)}</div>
                           {item.totalFindingsCount > 0 && (
                             <div className="text-[10px] text-slate-500">
-                              {item.verifiedFindingsCount} of {item.totalFindingsCount} findings verified
+                              {item.verifiedFindingsCount} of {item.applicableFindingsCount ?? item.totalFindingsCount} applicable findings verified
                               {item.nonCompliantFindingsCount > 0 && (
                                 <span className="ml-1 text-red-600 font-semibold">
                                   ({item.nonCompliantFindingsCount} violation{item.nonCompliantFindingsCount > 1 ? 's' : ''})

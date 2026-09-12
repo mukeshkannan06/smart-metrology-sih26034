@@ -31,8 +31,11 @@ export interface HistoricalSampleDetail {
   notes?: string;
   images: HistoricalImageMetadata[];
   findingsCount: number;
+  applicableCount?: number;
   verifiedFindingsCount: number;
+  verifiedApplicableCount?: number;
   nonCompliantCount: number;
+  isSampleVerified?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -129,6 +132,8 @@ export interface HistoricalInspectionDetail {
     totalSamples: number;
     samplesVerified: number;
     totalFindings: number;
+    totalApplicableFindings?: number;
+    exemptFindingsCount?: number;
     verifiedFindings: number;
     compliantFindings: number;
     nonCompliantFindings: number;

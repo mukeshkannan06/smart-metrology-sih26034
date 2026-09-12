@@ -16,8 +16,10 @@ import {
   IAuditEvent,
   UserRole,
   InspectionStatus,
-  PackageContext,
   FindingStatus,
+  FindingCandidateStatus,
+  InspectorVerificationDecision,
+  SampleStatus,
 } from '../models';
 import { UserContext } from './inspection.service';
 import { resolveTemporaryImagePath } from '../utils/tempStorage';
@@ -26,8 +28,12 @@ export interface HistoryListOptions {
   search?: string;
   status?: string;
   packageContext?: string;
+  commodity?: string;
+  inspectorId?: string;
   dateFrom?: string;
   dateTo?: string;
+  startDate?: string;
+  endDate?: string;
   page?: number;
   limit?: number;
 }
@@ -46,8 +52,11 @@ export interface HistoricalSampleDetail {
   notes?: string;
   images: HistoricalImageMetadata[];
   findingsCount: number;
+  applicableCount?: number;
   verifiedFindingsCount: number;
+  verifiedApplicableCount?: number;
   nonCompliantCount: number;
+  isSampleVerified?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -63,6 +72,8 @@ export interface HistoricalInspectionResponse {
     totalSamples: number;
     samplesVerified: number;
     totalFindings: number;
+    totalApplicableFindings: number;
+    exemptFindingsCount: number;
     verifiedFindings: number;
     compliantFindings: number;
     nonCompliantFindings: number;
@@ -75,6 +86,30 @@ export interface HistoricalInspectionResponse {
 }
 
 export class HistoryService {
+  /**
+   * Identifies whether a finding is exempt, scope-excluded, or non-applicable
+   * under statutory Legal Metrology rules for this package context.
+   */
+  public static isExemptOrNotApplicable(f: any): boolean {
+    const cStatus = f.candidateStatus;
+    const status = f.status;
+    const outcome = f.ruleEngineResult?.outcome;
+    const decision = f.inspectorVerification?.decision;
+    return (
+      cStatus === FindingCandidateStatus.NOT_APPLICABLE ||
+      cStatus === 'NOT_APPLICABLE' ||
+      status === FindingStatus.NOT_APPLICABLE ||
+      status === FindingStatus.VERIFIED_NOT_APPLICABLE ||
+      status === 'NOT_APPLICABLE' ||
+      status === 'VERIFIED_NOT_APPLICABLE' ||
+      outcome === 'NOT_APPLICABLE' ||
+      outcome === 'EXEMPT' ||
+      outcome === 'SCOPE_EXCLUDED' ||
+      decision === InspectorVerificationDecision.VERIFIED_NOT_APPLICABLE ||
+      decision === 'VERIFIED_NOT_APPLICABLE'
+    );
+  }
+
   /**
    * Retrieves paginated historical inspections with dynamic filters and aggregated KPI summary.
    * Inspectors can only view their own inspections. Controllers have jurisdiction-wide visibility.
@@ -112,42 +147,37 @@ export class HistoryService {
       query.$or = [{ inspectorId }, { inspectorId: user.id }];
     }
 
-    // 2. Status filter
-    if (options.status && Object.values(InspectionStatus).includes(options.status as InspectionStatus)) {
+    // 2. Filters
+    if (options.status && options.status !== ('ALL' as any)) {
       query.status = options.status;
     }
-
-    // 3. Package Context filter
-    if (
-      options.packageContext &&
-      Object.values(PackageContext).includes(options.packageContext as PackageContext)
-    ) {
+    if (options.packageContext && options.packageContext !== ('ALL' as any)) {
       query.packageContext = options.packageContext;
     }
-
-    // 4. Date range filter
-    if (options.dateFrom || options.dateTo) {
+    if (options.commodity && options.commodity.trim()) {
+      query.commodity = { $regex: options.commodity.trim(), $options: 'i' };
+    }
+    if (options.inspectorId && user.role !== UserRole.INSPECTOR) {
+      query.inspectorId = options.inspectorId.trim();
+    }
+    if (options.startDate || options.endDate) {
       query.createdAt = {};
-      if (options.dateFrom) {
-        query.createdAt.$gte = new Date(options.dateFrom);
-      }
-      if (options.dateTo) {
-        const toDate = new Date(options.dateTo);
-        toDate.setHours(23, 59, 59, 999);
-        query.createdAt.$lte = toDate;
+      if (options.startDate) query.createdAt.$gte = new Date(options.startDate);
+      if (options.endDate) {
+        const end = new Date(options.endDate);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
       }
     }
 
-    // 5. Search query across commodity, brand, location, inspectionNumber
-    if (options.search && options.search.trim() !== '') {
-      const searchRegex = new RegExp(options.search.trim(), 'i');
+    if (options.search && options.search.trim()) {
+      const searchRegex = { $regex: options.search.trim(), $options: 'i' };
       const searchConditions = [
+        { inspectionNumber: searchRegex },
         { commodity: searchRegex },
         { brand: searchRegex },
         { location: searchRegex },
-        { inspectionNumber: searchRegex },
       ];
-
       if (query.$or) {
         query.$and = [{ $or: query.$or }, { $or: searchConditions }];
         delete query.$or;
@@ -171,15 +201,17 @@ export class HistoryService {
 
     const [allSamples, allFindings] = await Promise.all([
       Sample.find({ inspectionId: { $in: inspectionIds } }).select('_id inspectionId status').lean(),
-      ComplianceFinding.find({ inspectionId: { $in: inspectionIds } }).select('_id inspectionId status isVerified candidateStatus').lean(),
+      ComplianceFinding.find({ inspectionId: { $in: inspectionIds } }).select('_id inspectionId status isVerified candidateStatus ruleEngineResult inspectorVerification').lean(),
     ]);
 
     const enrichedInspections = rawInspections.map((inspection) => {
       const insIdStr = inspection._id.toString();
       const samplesForIns = allSamples.filter((s) => s.inspectionId.toString() === insIdStr);
       const findingsForIns = allFindings.filter((f) => f.inspectionId.toString() === insIdStr);
-      const verifiedFindings = findingsForIns.filter((f) => f.isVerified);
-      const nonCompliantFindings = findingsForIns.filter(
+      const applicableForIns = findingsForIns.filter((f) => !HistoryService.isExemptOrNotApplicable(f));
+      const effectiveApplicable = applicableForIns.length > 0 ? applicableForIns : findingsForIns;
+      const verifiedFindings = effectiveApplicable.filter((f) => f.isVerified);
+      const nonCompliantFindings = effectiveApplicable.filter(
         (f) => f.status === FindingStatus.VERIFIED_NON_COMPLIANT || (!f.isVerified && f.candidateStatus === 'POTENTIAL_NON_COMPLIANCE')
       );
 
@@ -187,6 +219,8 @@ export class HistoryService {
         ...inspection,
         samplesCountActual: samplesForIns.length,
         totalFindingsCount: findingsForIns.length,
+        applicableFindingsCount: effectiveApplicable.length,
+        exemptFindingsCount: findingsForIns.length - effectiveApplicable.length,
         verifiedFindingsCount: verifiedFindings.length,
         nonCompliantFindingsCount: nonCompliantFindings.length,
       };
@@ -283,13 +317,20 @@ export class HistoryService {
       AuditEvent.find({ inspectionId: inspection._id }).sort({ timestamp: 1 }).lean(),
     ]);
 
-    // Format sample images with Evidence Availability State
+    // 1. Separate findings into applicable vs exempt/not-applicable under PCR rules
+    const applicableFindings = findings.filter((f) => !HistoryService.isExemptOrNotApplicable(f));
+    const exemptFindings = findings.filter((f) => HistoryService.isExemptOrNotApplicable(f));
+    const effectiveApplicable = applicableFindings.length > 0 ? applicableFindings : findings;
+
+    // 2. Format sample images with Evidence Availability State & determine unit completion
     const enrichedSamples: HistoricalSampleDetail[] = rawSamples.map((sample) => {
       const sampleFindings = findings.filter(
         (f) => f.sampleId && f.sampleId.toString() === sample._id.toString()
       );
-      const verifiedFindings = sampleFindings.filter((f) => f.isVerified);
-      const nonCompliantFindings = sampleFindings.filter(
+      const sampleApplicable = sampleFindings.filter((f) => !HistoryService.isExemptOrNotApplicable(f));
+      const effectiveSampleApplicable = sampleApplicable.length > 0 ? sampleApplicable : sampleFindings;
+      const verifiedFindings = effectiveSampleApplicable.filter((f) => f.isVerified);
+      const nonCompliantFindings = effectiveSampleApplicable.filter(
         (f) => f.status === FindingStatus.VERIFIED_NON_COMPLIANT || (!f.isVerified && f.candidateStatus === 'POTENTIAL_NON_COMPLIANCE')
       );
 
@@ -312,37 +353,44 @@ export class HistoryService {
         };
       });
 
+      const isSampleVerified =
+        sample.status === SampleStatus.VERIFIED ||
+        (effectiveSampleApplicable.length > 0 && verifiedFindings.length === effectiveSampleApplicable.length);
+
       return {
         ...sample,
         images,
         findingsCount: sampleFindings.length,
+        applicableCount: effectiveSampleApplicable.length,
         verifiedFindingsCount: verifiedFindings.length,
+        verifiedApplicableCount: verifiedFindings.length,
         nonCompliantCount: nonCompliantFindings.length,
+        isSampleVerified,
       };
     });
 
-    // Compute aggregate summary metrics
+    // 3. Compute aggregate summary metrics based on statutory applicability
     const totalSamples = enrichedSamples.length;
-    const samplesVerified = enrichedSamples.filter(
-      (s) => s.findingsCount > 0 && s.findingsCount === s.verifiedFindingsCount
-    ).length;
+    const samplesVerified = enrichedSamples.filter((s) => s.isSampleVerified).length;
 
     const totalFindings = findings.length;
-    const verifiedFindings = findings.filter((f) => f.isVerified).length;
-    const compliantFindings = findings.filter(
+    const totalApplicableFindings = effectiveApplicable.length;
+    const exemptFindingsCount = exemptFindings.length;
+    const verifiedFindings = effectiveApplicable.filter((f) => f.isVerified).length;
+    const compliantFindings = effectiveApplicable.filter(
       (f) => f.status === FindingStatus.VERIFIED_COMPLIANT || (!f.isVerified && f.candidateStatus === 'COMPLIANT_CANDIDATE')
     ).length;
-    const nonCompliantFindings = findings.filter(
+    const nonCompliantFindings = effectiveApplicable.filter(
       (f) => f.status === FindingStatus.VERIFIED_NON_COMPLIANT || (!f.isVerified && f.candidateStatus === 'POTENTIAL_NON_COMPLIANCE')
     ).length;
-    const requiresReviewFindings = findings.filter(
+    const requiresReviewFindings = effectiveApplicable.filter(
       (f) => f.status === FindingStatus.VERIFIED_REQUIRES_FURTHER_REVIEW || (!f.isVerified && f.candidateStatus === 'REQUIRES_INSPECTOR_REVIEW')
     ).length;
     const correctedObservationsCount = findings.filter((f) => f.isCorrected).length;
 
-    const overallComplianceRate = totalFindings > 0 ? Math.round((compliantFindings / totalFindings) * 100) : 100;
-    const percentVerified = totalFindings > 0 ? Math.round((verifiedFindings / totalFindings) * 100) : 0;
-    const isFullyAudited = totalFindings > 0 && verifiedFindings === totalFindings;
+    const overallComplianceRate = totalApplicableFindings > 0 ? Math.round((compliantFindings / totalApplicableFindings) * 100) : 100;
+    const percentVerified = totalApplicableFindings > 0 ? Math.round((verifiedFindings / totalApplicableFindings) * 100) : 100;
+    const isFullyAudited = totalApplicableFindings > 0 ? verifiedFindings === totalApplicableFindings : (findings.length > 0 && verifiedFindings === findings.length);
 
     return {
       inspectionData: {
@@ -356,6 +404,8 @@ export class HistoryService {
           totalSamples,
           samplesVerified,
           totalFindings,
+          totalApplicableFindings,
+          exemptFindingsCount,
           verifiedFindings,
           compliantFindings,
           nonCompliantFindings,
