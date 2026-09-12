@@ -12,6 +12,7 @@ import { InspectionWorkspace } from './pages/inspector/InspectionWorkspace';
 import { SampleWorkspace } from './pages/inspector/SampleWorkspace';
 import { MyInspections } from './pages/inspector/MyInspections';
 import { InspectionHistory } from './pages/inspector/InspectionHistory';
+import { InspectionHistoryDetail } from './pages/inspector/InspectionHistoryDetail';
 import { ComplianceFindings } from './pages/inspector/ComplianceFindings';
 import { ViolationsObservations } from './pages/inspector/ViolationsObservations';
 import { Reports } from './pages/inspector/Reports';
@@ -72,6 +73,7 @@ export const App: React.FC = () => {
                   <Route path="scan-capture" element={<Navigate to="/inspector/new-inspection" replace />} />
                   <Route path="my-inspections" element={<MyInspections />} />
                   <Route path="history" element={<InspectionHistory />} />
+                  <Route path="history/:id" element={<InspectionHistoryDetail />} />
                   <Route path="findings" element={<ComplianceFindings />} />
                   <Route path="violations" element={<ViolationsObservations />} />
                   <Route path="reports" element={<Reports />} />
@@ -89,7 +91,9 @@ export const App: React.FC = () => {
                   <Route path="dashboard" element={<ControllerDashboard />} />
                   <Route path="inspectors" element={<InspectorsList />} />
                   <Route path="inspections" element={<InspectionsOverview />} />
+                  <Route path="inspections/:id" element={<InspectionHistoryDetail />} />
                   <Route path="reports-analytics" element={<ReportsAnalytics />} />
+
                   <Route path="violations" element={<ViolationsSupervisory />} />
                   <Route path="products-commodities" element={<ProductsCommodities />} />
                   <Route path="rule-database" element={<RuleDatabase />} />

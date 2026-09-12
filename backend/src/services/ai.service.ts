@@ -170,6 +170,40 @@ export class AIService {
 
     await newExtraction.save();
 
+    try {
+      const { AuditService } = await import('./audit.service');
+      const { AuditEventType } = await import('../models/AuditEvent');
+      await AuditService.recordEvent({
+        eventType: AuditEventType.AI_ANALYSIS_COMPLETED,
+        entityType: 'AI_EXTRACTION',
+        entityId: newExtraction.extractionId,
+        inspectionId: inspection._id,
+        sampleId: sample._id,
+        actorUserId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        source: 'AI',
+        action: 'AI Multimodal Extraction Completed',
+        description: `Gemini extracted ${newExtraction.declarations.length} declarations with ${Math.round(Number(newExtraction.overallConfidence || 0) * 100)}% confidence (${newExtraction.warnings.length} warnings)`,
+        afterState: {
+          extractionId: newExtraction.extractionId,
+          status: newExtraction.status,
+          declarationsCount: newExtraction.declarations.length,
+          overallConfidence: newExtraction.overallConfidence,
+          aiModel: newExtraction.aiModel,
+          promptVersion: newExtraction.promptVersion,
+        },
+        metadata: {
+          aiModel: newExtraction.aiModel,
+          promptVersion: newExtraction.promptVersion,
+          durationMs: newExtraction.processingMetadata?.durationMs,
+          imagesCount: newExtraction.processingMetadata?.imagesCount,
+        },
+      });
+    } catch (auditErr) {
+      console.warn('Audit trail logging failed for analyzeSample:', auditErr);
+    }
+
     // Advance sample status to EXTRACTED if currently in CAPTURED, PENDING, or READY_FOR_ANALYSIS
     if (
       sample.status === SampleStatus.CAPTURED ||

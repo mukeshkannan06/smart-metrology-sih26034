@@ -5,5 +5,4 @@ export * from './Rule';
 export * from './AIExtraction';
 export * from './RuleEvaluation';
 export * from './Finding';
-
-
+export * from './AuditEvent';

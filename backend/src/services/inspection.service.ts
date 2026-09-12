@@ -61,7 +61,36 @@ export class InspectionService {
       remarks: dto.remarks ? dto.remarks.trim() : undefined,
     });
 
-    return await inspection.save();
+    const saved = await inspection.save();
+
+    try {
+      const { AuditService } = await import('./audit.service');
+      const { AuditEventType } = await import('../models/AuditEvent');
+      await AuditService.recordEvent({
+        eventType: AuditEventType.INSPECTION_CREATED,
+        entityType: 'INSPECTION',
+        entityId: saved._id.toString(),
+        inspectionId: saved._id,
+        actorUserId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        source: 'USER',
+        action: 'Created Inspection',
+        description: `Inspection ${saved.inspectionNumber} initialized for commodity "${saved.commodity}" (${saved.packageContext})`,
+        afterState: {
+          inspectionNumber: saved.inspectionNumber,
+          commodity: saved.commodity,
+          packageContext: saved.packageContext,
+          status: saved.status,
+          location: saved.location,
+          samplesCount: saved.samplesCount,
+        },
+      });
+    } catch (auditErr) {
+      console.warn('Audit trail logging failed for createInspection:', auditErr);
+    }
+
+    return saved;
   }
 
   /**

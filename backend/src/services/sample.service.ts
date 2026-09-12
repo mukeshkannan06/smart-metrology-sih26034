@@ -173,6 +173,32 @@ export class SampleService {
 
     await sample.save();
 
+    try {
+      const { AuditService } = await import('./audit.service');
+      const { AuditEventType } = await import('../models/AuditEvent');
+      await AuditService.recordEvent({
+        eventType: AuditEventType.SAMPLE_CREATED,
+        entityType: 'SAMPLE',
+        entityId: sample._id.toString(),
+        inspectionId: inspection._id,
+        sampleId: sample._id,
+        actorUserId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        source: 'USER',
+        action: 'Created Sample Unit',
+        description: `Sample unit ${sample.sampleCode} (#${sample.sampleNumber}) registered`,
+        afterState: {
+          sampleNumber: sample.sampleNumber,
+          sampleCode: sample.sampleCode,
+          status: sample.status,
+          notes: sample.notes,
+        },
+      });
+    } catch (auditErr) {
+      console.warn('Audit trail logging failed for createSample:', auditErr);
+    }
+
     const allSamples = [...existingSamples, sample];
     const progress = this.computeProgress(inspection.samplesCount, allSamples);
 
@@ -322,7 +348,32 @@ export class SampleService {
       sample.notes = dto.notes.trim();
     }
 
+    const beforeNotes = sample.notes;
+    const beforeStatus = sample.status;
+
     await sample.save();
+
+    try {
+      const { AuditService } = await import('./audit.service');
+      const { AuditEventType } = await import('../models/AuditEvent');
+      await AuditService.recordEvent({
+        eventType: AuditEventType.SAMPLE_UPDATED,
+        entityType: 'SAMPLE',
+        entityId: sample._id.toString(),
+        inspectionId: inspection._id,
+        sampleId: sample._id,
+        actorUserId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        source: 'USER',
+        action: 'Updated Sample Unit',
+        description: `Sample unit ${sample.sampleCode} updated: status=${sample.status}`,
+        beforeState: { notes: beforeNotes, status: beforeStatus },
+        afterState: { notes: sample.notes, status: sample.status },
+      });
+    } catch (auditErr) {
+      console.warn('Audit trail logging failed for updateSample:', auditErr);
+    }
 
     const allSamples = await Sample.find({ inspectionId: inspection._id }).sort({ sampleNumber: 1 });
     const progress = this.computeProgress(inspection.samplesCount, allSamples);
@@ -403,6 +454,33 @@ export class SampleService {
     }
 
     await sample.save();
+
+    try {
+      const { AuditService } = await import('./audit.service');
+      const { AuditEventType } = await import('../models/AuditEvent');
+      await AuditService.recordEvent({
+        eventType: AuditEventType.IMAGE_CAPTURED,
+        entityType: 'IMAGE',
+        entityId: newImage.imageId,
+        inspectionId: inspection._id,
+        sampleId: sample._id,
+        actorUserId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        source: 'USER',
+        action: 'Captured Package Image',
+        description: `Package photo #${newImage.sequence} uploaded (${newImage.mimeType}, ${Math.round(newImage.sizeBytes / 1024)} KB) for sample ${sample.sampleCode}`,
+        metadata: {
+          imageId: newImage.imageId,
+          sequence: newImage.sequence,
+          mimeType: newImage.mimeType,
+          sizeBytes: newImage.sizeBytes,
+          fileName: newImage.fileName,
+        },
+      });
+    } catch (auditErr) {
+      console.warn('Audit trail logging failed for attachImageToSample:', auditErr);
+    }
 
     // Mark previous extractions as STALE since image set changed
     if (mongoose.Types.ObjectId.isValid(sample._id)) {

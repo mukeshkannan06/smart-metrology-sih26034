@@ -187,6 +187,31 @@ export class FindingService {
       results.push(finding);
     }
 
+    try {
+      const { AuditService } = await import('./audit.service');
+      const { AuditEventType } = await import('../models/AuditEvent');
+      await AuditService.recordEvent({
+        eventType: AuditEventType.FINDINGS_GENERATED,
+        entityType: 'FINDING',
+        entityId: `FINDINGS-${evaluation.sampleCode}`,
+        inspectionId: evaluation.inspectionId,
+        sampleId: evaluation.sampleId,
+        actorUserId: evaluation.evaluated_by || 'SYSTEM',
+        actorName: 'Finding Sync Engine',
+        actorRole: 'SYSTEM',
+        source: 'RULE_ENGINE',
+        action: 'Generated Compliance Findings',
+        description: `Generated/synchronized ${results.length} compliance findings for sample ${evaluation.sampleCode}`,
+        metadata: {
+          sampleCode: evaluation.sampleCode,
+          totalFindings: results.length,
+          ruleDatabaseVersion: evaluation.rule_database_version || '1.0',
+        },
+      });
+    } catch (auditErr) {
+      console.warn('Audit trail logging failed for syncFindingsFromEvaluation:', auditErr);
+    }
+
     return results;
   }
 
@@ -458,6 +483,45 @@ export class FindingService {
 
     await finding.save();
 
+    try {
+      const { AuditService } = await import('./audit.service');
+      const { AuditEventType } = await import('../models/AuditEvent');
+      await AuditService.recordEvent({
+        eventType: AuditEventType.FINDING_VERIFIED,
+        entityType: 'FINDING',
+        entityId: finding.findingId,
+        inspectionId: finding.inspectionId,
+        sampleId: finding.sampleId,
+        findingId: finding._id,
+        actorUserId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        source: 'USER',
+        action: 'Verified Finding Decision',
+        description: `Inspector verified rule ${finding.ruleId} (${finding.ruleReference}) as ${dto.decision}${finding.isCorrected ? ' with corrected value' : ''}`,
+        beforeState: {
+          status: finding.candidateStatus,
+          isVerified: false,
+        },
+        afterState: {
+          decision: dto.decision,
+          status: finding.status,
+          verifiedValue: finding.inspectorVerification.verifiedValue,
+          isCorrected: finding.isCorrected,
+          notes: finding.inspectorVerification.notes,
+        },
+        metadata: {
+          ruleId: finding.ruleId,
+          ruleReference: finding.ruleReference,
+          decision: dto.decision,
+          originalAiValue: originalAiValue,
+          verifiedValue: verifiedValue,
+        },
+      });
+    } catch (auditErr) {
+      console.warn('Audit trail logging failed for verifyFinding:', auditErr);
+    }
+
     // 6. Check if all findings for this sample are now verified
     const allSampleFindings = await ComplianceFinding.find({ sampleId: finding.sampleId });
     const telemetry = this.calculateTelemetry(allSampleFindings);
@@ -531,6 +595,44 @@ export class FindingService {
     }
 
     await finding.save();
+
+    try {
+      const { AuditService } = await import('./audit.service');
+      const { AuditEventType } = await import('../models/AuditEvent');
+      await AuditService.recordEvent({
+        eventType: AuditEventType.FINDING_CORRECTED,
+        entityType: 'FINDING',
+        entityId: finding.findingId,
+        inspectionId: finding.inspectionId,
+        sampleId: finding.sampleId,
+        findingId: finding._id,
+        actorUserId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        source: 'USER',
+        action: 'Corrected Extracted Value',
+        description: `Inspector corrected value for rule ${finding.ruleId} (${finding.ruleReference}) from "${originalAiValue || 'N/A'}" to "${dto.correctedValue.trim()}"`,
+        beforeState: {
+          extractedValue: originalAiValue,
+          isCorrected: false,
+        },
+        afterState: {
+          verifiedValue: dto.correctedValue.trim(),
+          originalAiValuePreserved: originalAiValue,
+          isCorrected: true,
+          notes: finding.inspectorVerification.notes,
+        },
+        metadata: {
+          ruleId: finding.ruleId,
+          ruleReference: finding.ruleReference,
+          previousValue: originalAiValue,
+          newValue: dto.correctedValue.trim(),
+        },
+      });
+    } catch (auditErr) {
+      console.warn('Audit trail logging failed for correctFinding:', auditErr);
+    }
+
     return finding;
   }
 }

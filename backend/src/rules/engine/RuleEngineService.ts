@@ -123,6 +123,33 @@ export class RuleEngineService {
       evaluated_by: evaluatorId,
     });
 
+    try {
+      const { AuditService } = await import('../../services/audit.service');
+      const { AuditEventType } = await import('../../models/AuditEvent');
+      await AuditService.recordEvent({
+        eventType: AuditEventType.RULE_EVALUATION_COMPLETED,
+        entityType: 'RULE_EVALUATION',
+        entityId: evaluationDoc.evaluation_id,
+        inspectionId: inspection._id,
+        sampleId: sample._id,
+        actorUserId: evaluatorId,
+        actorName: 'Rule Engine Evaluation',
+        actorRole: 'SYSTEM',
+        source: 'RULE_ENGINE',
+        action: 'Evaluated Statutory Rules',
+        description: `Evaluated ${evaluatedItems.length} statutory rules against DB v${evaluationDoc.rule_database_version || '1.0'} (${summary.applicable_count} applicable, ${summary.potential_violations_count} potential violations)`,
+        afterState: summary,
+        metadata: {
+          evaluationId: evaluationDoc.evaluation_id,
+          ruleDatabaseVersion: evaluationDoc.rule_database_version,
+          applicableCount: summary.applicable_count,
+          potentialViolationsCount: summary.potential_violations_count,
+        },
+      });
+    } catch (auditErr) {
+      console.warn('Audit trail logging failed for evaluateSample:', auditErr);
+    }
+
     // 8. Phase 12: Automatically synchronize Compliance Findings
     try {
       await FindingService.syncFindingsFromEvaluation(evaluationDoc);
