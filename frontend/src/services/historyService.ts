@@ -164,12 +164,33 @@ export interface HistoryListResponse {
   };
 }
 
+interface CacheRecord<T> {
+  data: T;
+  timestamp: number;
+}
+
+const historyClientCache = new Map<string, CacheRecord<any>>();
+const HISTORY_CACHE_TTL = 30 * 1000; // 30 seconds
+
+export function clearHistoryClientCache(): void {
+  historyClientCache.clear();
+}
+
 /**
  * Fetches paginated inspection history records with search and filters.
  */
 export async function fetchInspectionHistory(
-  options: HistoryFilterOptions = {}
+  options: HistoryFilterOptions = {},
+  forceRefresh: boolean = false
 ): Promise<HistoryListResponse> {
+  const cacheKey = `history:${JSON.stringify(options)}`;
+  if (!forceRefresh) {
+    const cached = historyClientCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < HISTORY_CACHE_TTL) {
+      return cached.data;
+    }
+  }
+
   const query = new URLSearchParams();
   if (options.search) query.append('search', options.search);
   if (options.status) query.append('status', options.status);
@@ -195,7 +216,7 @@ export async function fetchInspectionHistory(
   }
 
   const json = await response.json();
-  return {
+  const result: HistoryListResponse = {
     inspections: json.data || [],
     pagination: json.pagination || { total: 0, page: 1, limit: 10, totalPages: 1 },
     summaryKpis: json.summaryKpis || {
@@ -208,6 +229,9 @@ export async function fetchInspectionHistory(
       complianceRate: 100,
     },
   };
+
+  historyClientCache.set(cacheKey, { data: result, timestamp: Date.now() });
+  return result;
 }
 
 /**

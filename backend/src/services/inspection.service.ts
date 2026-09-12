@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { Inspection, IInspection, PackageContext, InspectionStatus, UserRole } from '../models';
+import { escapeRegex } from '../utils/securitySanitizer';
 
 export interface CreateInspectionDTO {
   commodity: string;
@@ -125,7 +126,8 @@ export class InspectionService {
 
     // Search query across commodity, brand, location, inspectionNumber
     if (options.search && options.search.trim() !== '') {
-      const searchRegex = new RegExp(options.search.trim(), 'i');
+      const escaped = escapeRegex(options.search.trim());
+      const searchRegex = new RegExp(escaped, 'i');
       const searchConditions = [
         { commodity: searchRegex },
         { brand: searchRegex },

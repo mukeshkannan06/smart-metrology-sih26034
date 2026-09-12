@@ -80,7 +80,10 @@ export async function getInspectorDashboardData(
     ? { $or: [{ inspectorId }, { inspectorId: userMongoId }] }
     : { inspectorId };
 
-  const inspections = await Inspection.find(query).sort({ createdAt: -1 }).lean();
+  const inspections = await Inspection.find(query)
+    .select('inspectionNumber inspectorId commodity brand packageContext location market samplesCount status createdAt')
+    .sort({ createdAt: -1 })
+    .lean();
 
   const totalInspections = inspections.length;
   const inProgress = inspections.filter((i) => i.status === InspectionStatus.IN_PROGRESS).length;
@@ -159,7 +162,10 @@ export async function getControllerDashboardData(): Promise<ControllerDashboardD
   const totalInspectors = inspectors.length;
 
   // Query all inspections across the jurisdiction
-  const allInspections = await Inspection.find().sort({ createdAt: -1 }).lean();
+  const allInspections = await Inspection.find()
+    .select('inspectionNumber inspectorId commodity brand packageContext location market samplesCount status createdAt')
+    .sort({ createdAt: -1 })
+    .lean();
 
   const totalInspections = allInspections.length;
   const inProgress = allInspections.filter((i) => i.status === InspectionStatus.IN_PROGRESS).length;

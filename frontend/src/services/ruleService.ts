@@ -94,12 +94,35 @@ export interface RuleEvaluationData {
   evaluated_by: string;
 }
 
-export async function fetchRules(filters?: {
-  status?: string;
-  family?: string;
-  context?: string;
-  search?: string;
-}): Promise<RuleItem[]> {
+interface CacheRecord<T> {
+  data: T;
+  timestamp: number;
+}
+
+const ruleClientCache = new Map<string, CacheRecord<any>>();
+const RULE_CACHE_TTL = 60 * 1000; // 60 seconds
+
+export function clearRuleClientCache(): void {
+  ruleClientCache.clear();
+}
+
+export async function fetchRules(
+  filters?: {
+    status?: string;
+    family?: string;
+    context?: string;
+    search?: string;
+  },
+  forceRefresh: boolean = false
+): Promise<RuleItem[]> {
+  const cacheKey = `rules:${JSON.stringify(filters || {})}`;
+  if (!forceRefresh) {
+    const cached = ruleClientCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < RULE_CACHE_TTL) {
+      return cached.data;
+    }
+  }
+
   const params = new URLSearchParams();
   if (filters?.status) params.append('status', filters.status);
   if (filters?.family) params.append('family', filters.family);
@@ -119,10 +142,20 @@ export async function fetchRules(filters?: {
   }
 
   const json = await response.json();
-  return json.rules || [];
+  const rules = json.rules || [];
+  ruleClientCache.set(cacheKey, { data: rules, timestamp: Date.now() });
+  return rules;
 }
 
-export async function fetchRuleStatistics(): Promise<RuleStatistics> {
+export async function fetchRuleStatistics(forceRefresh: boolean = false): Promise<RuleStatistics> {
+  const cacheKey = 'rules:statistics';
+  if (!forceRefresh) {
+    const cached = ruleClientCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < RULE_CACHE_TTL) {
+      return cached.data;
+    }
+  }
+
   const response = await fetch('/api/rules/summary/statistics', {
     method: 'GET',
     headers: { 'Content-Type': 'application/json' },
@@ -135,6 +168,7 @@ export async function fetchRuleStatistics(): Promise<RuleStatistics> {
   }
 
   const json = await response.json();
+  ruleClientCache.set(cacheKey, { data: json.statistics, timestamp: Date.now() });
   return json.statistics;
 }
 
@@ -172,6 +206,7 @@ export async function updateRuleStatus(
   }
 
   const json = await response.json();
+  clearRuleClientCache();
   return json.rule;
 }
 

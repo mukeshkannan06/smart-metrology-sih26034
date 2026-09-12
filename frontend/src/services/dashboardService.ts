@@ -75,11 +75,31 @@ export interface ControllerDashboardData {
   };
 }
 
+interface CacheRecord<T> {
+  data: T;
+  timestamp: number;
+}
+
+const dashboardClientCache = new Map<string, CacheRecord<any>>();
+const DASHBOARD_CACHE_TTL = 30 * 1000; // 30 seconds
+
+export function clearDashboardClientCache(): void {
+  dashboardClientCache.clear();
+}
+
 /**
  * Fetch Inspector Dashboard metrics from backend API.
  * Uses HTTP-only session cookie (credentials: 'include').
  */
-export async function fetchInspectorDashboard(): Promise<InspectorDashboardData> {
+export async function fetchInspectorDashboard(forceRefresh: boolean = false): Promise<InspectorDashboardData> {
+  const cacheKey = 'inspector:dashboard';
+  if (!forceRefresh) {
+    const cached = dashboardClientCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < DASHBOARD_CACHE_TTL) {
+      return cached.data;
+    }
+  }
+
   const response = await fetch('/api/dashboard/inspector', {
     method: 'GET',
     headers: { 'Content-Type': 'application/json' },
@@ -98,6 +118,7 @@ export async function fetchInspectorDashboard(): Promise<InspectorDashboardData>
   }
 
   const json = await response.json();
+  dashboardClientCache.set(cacheKey, { data: json.data, timestamp: Date.now() });
   return json.data;
 }
 
@@ -105,7 +126,15 @@ export async function fetchInspectorDashboard(): Promise<InspectorDashboardData>
  * Fetch Assistant Controller supervisory dashboard metrics from backend API.
  * Uses HTTP-only session cookie (credentials: 'include').
  */
-export async function fetchControllerDashboard(): Promise<ControllerDashboardData> {
+export async function fetchControllerDashboard(forceRefresh: boolean = false): Promise<ControllerDashboardData> {
+  const cacheKey = 'controller:dashboard';
+  if (!forceRefresh) {
+    const cached = dashboardClientCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < DASHBOARD_CACHE_TTL) {
+      return cached.data;
+    }
+  }
+
   const response = await fetch('/api/dashboard/controller', {
     method: 'GET',
     headers: { 'Content-Type': 'application/json' },
@@ -124,6 +153,8 @@ export async function fetchControllerDashboard(): Promise<ControllerDashboardDat
   }
 
   const json = await response.json();
+  dashboardClientCache.set(cacheKey, { data: json.data, timestamp: Date.now() });
   return json.data;
 }
+
 

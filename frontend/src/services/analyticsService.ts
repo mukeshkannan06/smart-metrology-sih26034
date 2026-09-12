@@ -157,6 +157,18 @@ export interface MonitoredInspectionsResult {
   };
 }
 
+interface CacheRecord<T> {
+  data: T;
+  timestamp: number;
+}
+
+const clientCache = new Map<string, CacheRecord<any>>();
+const CLIENT_CACHE_TTL = 30 * 1000; // 30 seconds
+
+export function clearAnalyticsClientCache(): void {
+  clientCache.clear();
+}
+
 function buildQueryString(params: Record<string, any>): string {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, val]) => {
@@ -169,8 +181,17 @@ function buildQueryString(params: Record<string, any>): string {
 }
 
 export async function fetchAnalyticsOverview(
-  filters: AnalyticsFilterParams = {}
+  filters: AnalyticsFilterParams = {},
+  forceRefresh: boolean = false
 ): Promise<AnalyticsOverviewData> {
+  const cacheKey = `overview:${JSON.stringify(filters)}`;
+  if (!forceRefresh) {
+    const cached = clientCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CLIENT_CACHE_TTL) {
+      return cached.data;
+    }
+  }
+
   const qs = buildQueryString(filters);
   const response = await fetch(`/api/analytics/overview${qs}`, {
     method: 'GET',
@@ -185,12 +206,22 @@ export async function fetchAnalyticsOverview(
     throw new Error(json.error || 'Failed to fetch supervisory analytics overview');
   }
 
+  clientCache.set(cacheKey, { data: json.data, timestamp: Date.now() });
   return json.data;
 }
 
 export async function fetchSupervisoryInspectors(
-  filters: AnalyticsFilterParams = {}
+  filters: AnalyticsFilterParams = {},
+  forceRefresh: boolean = false
 ): Promise<InspectorSupervisoryItem[]> {
+  const cacheKey = `inspectors:${JSON.stringify(filters)}`;
+  if (!forceRefresh) {
+    const cached = clientCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CLIENT_CACHE_TTL) {
+      return cached.data;
+    }
+  }
+
   const qs = buildQueryString(filters);
   const response = await fetch(`/api/analytics/inspectors${qs}`, {
     method: 'GET',
@@ -205,12 +236,22 @@ export async function fetchSupervisoryInspectors(
     throw new Error(json.error || 'Failed to fetch supervisory inspectors list');
   }
 
+  clientCache.set(cacheKey, { data: json.data, timestamp: Date.now() });
   return json.data;
 }
 
 export async function fetchSupervisoryViolations(
-  filters: AnalyticsFilterParams = {}
+  filters: AnalyticsFilterParams = {},
+  forceRefresh: boolean = false
 ): Promise<SupervisoryViolationItem[]> {
+  const cacheKey = `violations:${JSON.stringify(filters)}`;
+  if (!forceRefresh) {
+    const cached = clientCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CLIENT_CACHE_TTL) {
+      return cached.data;
+    }
+  }
+
   const qs = buildQueryString(filters);
   const response = await fetch(`/api/analytics/violations${qs}`, {
     method: 'GET',
@@ -225,6 +266,7 @@ export async function fetchSupervisoryViolations(
     throw new Error(json.error || 'Failed to fetch supervisory violations');
   }
 
+  clientCache.set(cacheKey, { data: json.data, timestamp: Date.now() });
   return json.data;
 }
 

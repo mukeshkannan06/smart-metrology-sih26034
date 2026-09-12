@@ -23,6 +23,7 @@ import {
 } from '../models';
 import { UserContext } from './inspection.service';
 import { resolveTemporaryImagePath } from '../utils/tempStorage';
+import { escapeRegex } from '../utils/securitySanitizer';
 
 export interface HistoryListOptions {
   search?: string;
@@ -155,7 +156,7 @@ export class HistoryService {
       query.packageContext = options.packageContext;
     }
     if (options.commodity && options.commodity.trim()) {
-      query.commodity = { $regex: options.commodity.trim(), $options: 'i' };
+      query.commodity = { $regex: escapeRegex(options.commodity.trim()), $options: 'i' };
     }
     if (options.inspectorId && user.role !== UserRole.INSPECTOR) {
       query.inspectorId = options.inspectorId.trim();
@@ -171,7 +172,8 @@ export class HistoryService {
     }
 
     if (options.search && options.search.trim()) {
-      const searchRegex = { $regex: options.search.trim(), $options: 'i' };
+      const escaped = escapeRegex(options.search.trim());
+      const searchRegex = { $regex: escaped, $options: 'i' };
       const searchConditions = [
         { inspectionNumber: searchRegex },
         { commodity: searchRegex },

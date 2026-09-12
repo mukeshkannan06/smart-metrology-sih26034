@@ -3,10 +3,12 @@ import { AuthController } from '../controllers/auth.controller';
 import { requireAuth, requireRole } from '../middleware/auth.middleware';
 import { UserRole } from '../models';
 
+import { authRateLimiter } from '../middleware/rateLimiter';
+
 const router = Router();
 
-// Public Authentication Endpoints
-router.post('/login', AuthController.login);
+// Public Authentication Endpoints (Rate limited against brute force)
+router.post('/login', authRateLimiter, AuthController.login);
 router.post('/logout', AuthController.logout);
 
 // Protected Authentication Verification Endpoint

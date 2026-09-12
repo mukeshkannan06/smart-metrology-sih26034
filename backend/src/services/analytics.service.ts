@@ -291,13 +291,15 @@ export class AnalyticsService {
 
     const matchingInspectionIds = matchingInspections.map((i) => i._id);
 
-    // 2. Fetch associated samples and findings in parallel
+    // 2. Fetch associated samples and findings in parallel (with selective projection for high performance)
     const [matchingSamples, matchingFindings] = await Promise.all([
       matchingInspectionIds.length > 0
-        ? Sample.find({ inspectionId: { $in: matchingInspectionIds } }).lean()
+        ? Sample.find({ inspectionId: { $in: matchingInspectionIds } }).select('_id inspectionId status').lean()
         : [],
       matchingInspectionIds.length > 0
-        ? ComplianceFinding.find({ inspectionId: { $in: matchingInspectionIds } }).lean()
+        ? ComplianceFinding.find({ inspectionId: { $in: matchingInspectionIds } })
+            .select('_id inspectionId status candidateStatus isVerified isCorrected declarationType ruleReference createdAt')
+            .lean()
         : [],
     ]);
 
@@ -611,11 +613,22 @@ export class AnalyticsService {
     const dateRange = this.parseDateRange(filters);
     const inspectionMatch = this.buildInspectionMatch(filters, dateRange);
 
-    const [inspectors, inspections, samples, findings] = await Promise.all([
+    const [inspectors, inspections] = await Promise.all([
       User.find({ role: UserRole.INSPECTOR }).sort({ name: 1 }).lean(),
       Inspection.find(inspectionMatch).sort({ createdAt: -1 }).lean(),
-      Sample.find().lean(),
-      ComplianceFinding.find().lean(),
+    ]);
+
+    const inspectionIds = inspections.map((i) => i._id);
+
+    const [samples, findings] = await Promise.all([
+      inspectionIds.length > 0
+        ? Sample.find({ inspectionId: { $in: inspectionIds } }).select('_id inspectionId').lean()
+        : [],
+      inspectionIds.length > 0
+        ? ComplianceFinding.find({ inspectionId: { $in: inspectionIds } })
+            .select('_id inspectionId status candidateStatus isVerified')
+            .lean()
+        : [],
     ]);
 
     return inspectors.map((insp) => {

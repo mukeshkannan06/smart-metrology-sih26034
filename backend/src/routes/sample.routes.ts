@@ -4,6 +4,7 @@ import { UserRole } from '../models';
 import { SampleController } from '../controllers/sample.controller';
 import { AIController } from '../controllers/ai.controller';
 import { RuleController } from '../controllers/rule.controller';
+import { uploadRateLimiter, aiRateLimiter } from '../middleware/rateLimiter';
 
 const router = Router({ mergeParams: true });
 
@@ -43,7 +44,7 @@ router.patch('/:sampleId', requireRole(UserRole.INSPECTOR), SampleController.upd
  * @desc    Upload and attach a package photo to a sample
  * @access  Private (Inspector only; Assistant Controller gets 403)
  */
-router.post('/:sampleId/images', requireRole(UserRole.INSPECTOR), SampleController.uploadImage);
+router.post('/:sampleId/images', requireRole(UserRole.INSPECTOR), uploadRateLimiter, SampleController.uploadImage);
 
 /**
  * @route   GET /api/inspections/:inspectionId/samples/:sampleId/images
@@ -74,6 +75,7 @@ router.delete('/:sampleId/images/:imageId', requireRole(UserRole.INSPECTOR), Sam
 router.post(
   '/:sampleId/ai-analysis',
   requireRole(UserRole.INSPECTOR),
+  aiRateLimiter,
   AIController.analyzeSample
 );
 

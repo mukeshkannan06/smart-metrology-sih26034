@@ -5,6 +5,8 @@ import { Rule, RuleOperationalStatus } from '../models/Rule';
 import { RuleEvaluation } from '../models/RuleEvaluation';
 import { RuleEngineService } from '../rules/engine/RuleEngineService';
 import { Sample } from '../models/Sample';
+import { Inspection } from '../models/Inspection';
+import { UserRole } from '../models/User';
 
 export class RuleController {
   /**
@@ -245,9 +247,37 @@ export class RuleController {
       if (!sample) {
         res.status(404).json({
           success: false,
-          error: `Sample '${sampleId}' not found`,
+          error: 'Not Found',
+          message: `Sample '${sampleId}' not found`,
         });
         return;
+      }
+
+      // Verify ownership of parent inspection
+      const inspection = await Inspection.findById(sample.inspectionId);
+      if (!inspection) {
+        res.status(404).json({
+          success: false,
+          error: 'Not Found',
+          message: `Parent inspection not found for sample '${sampleId}'`,
+        });
+        return;
+      }
+
+      if (user?.role === UserRole.INSPECTOR) {
+        const userBadge = user.inspectorId;
+        const userMongoId = user.id;
+        const isOwner =
+          inspection.inspectorId === userBadge || inspection.inspectorId === userMongoId;
+
+        if (!isOwner) {
+          res.status(403).json({
+            success: false,
+            error: 'Forbidden',
+            message: "Access Denied: You cannot evaluate samples belonging to another inspector's case.",
+          });
+          return;
+        }
       }
 
       const evaluation = await RuleEngineService.evaluateSample(
@@ -277,6 +307,45 @@ export class RuleController {
   public static async getSampleEvaluations(req: Request, res: Response): Promise<void> {
     try {
       const { sampleId } = req.params;
+      const user = (req as any).user;
+
+      // Find sample first to check authorization
+      const sample = await Sample.findById(sampleId);
+      if (!sample) {
+        res.status(404).json({
+          success: false,
+          error: 'Not Found',
+          message: `Sample '${sampleId}' not found`,
+        });
+        return;
+      }
+
+      // Verify ownership for Inspector
+      if (user?.role === UserRole.INSPECTOR) {
+        const inspection = await Inspection.findById(sample.inspectionId);
+        if (!inspection) {
+          res.status(404).json({
+            success: false,
+            error: 'Not Found',
+            message: `Parent inspection not found for sample '${sampleId}'`,
+          });
+          return;
+        }
+
+        const userBadge = user.inspectorId;
+        const userMongoId = user.id;
+        const isOwner =
+          inspection.inspectorId === userBadge || inspection.inspectorId === userMongoId;
+
+        if (!isOwner) {
+          res.status(403).json({
+            success: false,
+            error: 'Forbidden',
+            message: "Access Denied: You cannot view evaluations for another inspector's sample.",
+          });
+          return;
+        }
+      }
 
       const evaluations = await RuleEvaluation.find({ sampleId })
         .sort({ evaluated_at: -1 })

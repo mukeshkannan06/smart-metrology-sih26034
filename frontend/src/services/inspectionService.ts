@@ -80,6 +80,18 @@ export const PACKAGE_CONTEXT_DEFINITIONS: Record<
   },
 };
 
+interface CacheRecord<T> {
+  data: T;
+  timestamp: number;
+}
+
+const inspectionClientCache = new Map<string, CacheRecord<any>>();
+const INSPECTION_CACHE_TTL = 30 * 1000; // 30 seconds
+
+export function clearInspectionClientCache(): void {
+  inspectionClientCache.clear();
+}
+
 /**
  * Creates a new inspection via the backend API.
  * Uses HTTP-only cookie credentials.
@@ -106,17 +118,29 @@ export async function createInspection(
   }
 
   const json = await response.json();
+  clearInspectionClientCache();
   return json.data;
 }
 
 /**
  * Fetches all inspections for the authenticated officer.
  */
-export async function fetchMyInspections(params?: {
-  search?: string;
-  status?: string;
-  packageContext?: string;
-}): Promise<InspectionData[]> {
+export async function fetchMyInspections(
+  params?: {
+    search?: string;
+    status?: string;
+    packageContext?: string;
+  },
+  forceRefresh: boolean = false
+): Promise<InspectionData[]> {
+  const cacheKey = `my_inspections:${JSON.stringify(params || {})}`;
+  if (!forceRefresh) {
+    const cached = inspectionClientCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < INSPECTION_CACHE_TTL) {
+      return cached.data;
+    }
+  }
+
   const query = new URLSearchParams();
   if (params?.search) query.append('search', params.search);
   if (params?.status) query.append('status', params.status);
@@ -138,7 +162,9 @@ export async function fetchMyInspections(params?: {
   }
 
   const json = await response.json();
-  return json.data || [];
+  const data = json.data || [];
+  inspectionClientCache.set(cacheKey, { data, timestamp: Date.now() });
+  return data;
 }
 
 /**

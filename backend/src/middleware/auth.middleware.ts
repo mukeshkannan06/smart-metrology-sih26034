@@ -27,6 +27,21 @@ interface JwtPayload {
   exp?: number;
 }
 
+interface CachedUserEntry {
+  user: AuthenticatedUser;
+  expiresAt: number;
+}
+
+const authUserCache = new Map<string, CachedUserEntry>();
+
+export const clearAuthUserCache = (userId?: string): void => {
+  if (userId) {
+    authUserCache.delete(userId);
+  } else {
+    authUserCache.clear();
+  }
+};
+
 /**
  * Authentication Middleware: Validates JWT from HTTP-only cookie or Authorization header.
  * Rejects unauthenticated requests with HTTP 401.
@@ -69,10 +84,19 @@ export const requireAuth = async (
       return;
     }
 
-    // 3. Find user and verify active status
+    // 3. Find user and verify active status (with fast 60s memory cache to avoid redundant cloud DB round-trips)
+    const now = Date.now();
+    const cached = authUserCache.get(decoded.userId);
+    if (cached && now < cached.expiresAt) {
+      req.user = cached.user;
+      next();
+      return;
+    }
+
     const user = await User.findById(decoded.userId);
 
     if (!user || user.status !== UserStatus.ACTIVE) {
+      authUserCache.delete(decoded.userId);
       res.status(401).json({
         success: false,
         error: 'Unauthorized',
@@ -81,7 +105,7 @@ export const requireAuth = async (
       return;
     }
 
-    // 4. Attach safe user context to request
+    // 4. Attach safe user context to request and cache for 60s
     req.user = {
       id: user._id.toString(),
       username: user.username,
@@ -90,6 +114,10 @@ export const requireAuth = async (
       inspectorId: user.inspectorId,
       isDemo: user.isDemo,
     };
+    authUserCache.set(decoded.userId, {
+      user: req.user,
+      expiresAt: now + 60 * 1000,
+    });
 
     next();
   } catch (error) {
