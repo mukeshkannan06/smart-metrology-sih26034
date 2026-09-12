@@ -7,6 +7,7 @@ import ruleRoutes from './rule.routes';
 import ruleEngineRoutes from './ruleEngine.routes';
 import findingRoutes from './finding.routes';
 import historyRoutes from './history.routes';
+import reportRoutes from './report.routes';
 
 const apiRouter = Router();
 
@@ -34,6 +35,10 @@ apiRouter.use('/findings', findingRoutes);
 // Mount Inspection History & Audit endpoints (/api/history/...)
 apiRouter.use('/history', historyRoutes);
 
+// Mount Consolidated Inspection Reports endpoints (/api/reports/...)
+apiRouter.use('/reports', reportRoutes);
+
 export default apiRouter;
+
 
 

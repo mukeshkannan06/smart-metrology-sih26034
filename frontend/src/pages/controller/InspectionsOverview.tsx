@@ -271,17 +271,30 @@ export const InspectionsOverview: React.FC = () => {
                       </td>
 
                       <td className="py-3.5 px-4 text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          icon={<Eye className="w-3.5 h-3.5" />}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/controller/inspections/${item._id}`);
-                          }}
-                        >
-                          Audit Record
-                        </Button>
+                        <div className="flex items-center justify-end space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            icon={<Download className="w-3.5 h-3.5" />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/controller/generate-pdf/${item._id}`);
+                            }}
+                          >
+                            PDF
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            icon={<Eye className="w-3.5 h-3.5" />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/controller/inspections/${item._id}`);
+                            }}
+                          >
+                            Audit Record
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}

@@ -75,7 +75,7 @@ export class GeminiProvider implements AIProvider {
 
   private get modelName(): string {
     this.reloadEnv();
-    return process.env.GEMINI_MODEL?.trim() || 'gemini-3.6-flash';
+    return process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
   }
 
   public isLiveApiAvailable(): boolean {
@@ -99,7 +99,18 @@ export class GeminiProvider implements AIProvider {
     }
 
     const primary = this.modelName;
-    const candidates = Array.from(new Set([primary, 'gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-3.6-flash']));
+    const candidates = Array.from(
+      new Set([
+        primary,
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro',
+        'gemini-3.7-flash',
+        'gemini-3.5-flash',
+        'gemini-3.6-flash',
+      ])
+    );
 
     let lastError: any;
     for (const targetModel of candidates) {

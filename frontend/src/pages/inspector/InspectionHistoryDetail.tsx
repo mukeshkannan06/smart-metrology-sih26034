@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   Calendar,
@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronUp,
   BadgeAlert,
+  FileText,
 } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
@@ -43,6 +44,7 @@ type TabType = 'summary' | 'technical' | 'audit';
 export const InspectionHistoryDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -107,6 +109,10 @@ export const InspectionHistoryDetail: React.FC = () => {
     return isNaN(d.getTime()) ? 'N/A' : d.toLocaleString();
   };
 
+  const pdfUrl = location.pathname.startsWith('/controller')
+    ? `/controller/generate-pdf/${inspection._id}`
+    : `/inspector/generate-pdf/${inspection._id}`;
+
   return (
     <div className="space-y-6 pb-12">
       {/* Top Navigation Bar */}
@@ -119,13 +125,23 @@ export const InspectionHistoryDetail: React.FC = () => {
         >
           Back
         </Button>
-        <div className="flex items-center space-x-2">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-            Case Archive
-          </span>
-          <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
-            {inspection.inspectionNumber}
-          </span>
+        <div className="flex items-center space-x-3">
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<FileText className="w-3.5 h-3.5" />}
+            onClick={() => navigate(pdfUrl)}
+          >
+            Export Official PDF
+          </Button>
+          <div className="flex items-center space-x-2">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+              Case Archive
+            </span>
+            <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
+              {inspection.inspectionNumber}
+            </span>
+          </div>
         </div>
       </div>
 

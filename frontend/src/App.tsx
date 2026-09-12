@@ -78,6 +78,7 @@ export const App: React.FC = () => {
                   <Route path="violations" element={<ViolationsObservations />} />
                   <Route path="reports" element={<Reports />} />
                   <Route path="generate-pdf" element={<GeneratePDF />} />
+                  <Route path="generate-pdf/:id" element={<GeneratePDF />} />
                   <Route path="rule-reference" element={<RuleReference />} />
                   <Route path="downloads" element={<Downloads />} />
                   <Route path="settings" element={<Settings />} />
@@ -92,6 +93,7 @@ export const App: React.FC = () => {
                   <Route path="inspectors" element={<InspectorsList />} />
                   <Route path="inspections" element={<InspectionsOverview />} />
                   <Route path="inspections/:id" element={<InspectionHistoryDetail />} />
+                  <Route path="generate-pdf/:id" element={<GeneratePDF />} />
                   <Route path="reports-analytics" element={<ReportsAnalytics />} />
 
                   <Route path="violations" element={<ViolationsSupervisory />} />
