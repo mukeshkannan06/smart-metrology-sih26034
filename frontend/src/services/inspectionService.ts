@@ -1,4 +1,5 @@
 import { getApiUrl, getAuthHeaders } from './apiConfig';
+import { clearDashboardClientCache } from './dashboardService';
 
 export enum PackageContext {
   RETAIL_PACKAGE = 'RETAIL_PACKAGE',
@@ -195,5 +196,41 @@ export async function fetchInspectionById(id: string): Promise<InspectionData> {
 
   const json = await response.json();
   return json.data;
+}
+
+/**
+ * Finalizes an inspection case: transitions status to COMPLETED,
+ * logs official audit seal, and clears client caches.
+ */
+export async function finalizeInspection(
+  id: string,
+  remarks?: string
+): Promise<{ inspection: InspectionData; auditEventId: string }> {
+  clearInspectionClientCache();
+  clearDashboardClientCache();
+
+  const response = await fetch(getApiUrl(`/api/inspections/${encodeURIComponent(id)}/finalize`), {
+    method: 'PATCH',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ remarks }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Authentication expired. Please log in again.');
+    }
+    if (response.status === 403) {
+      throw new Error('Access Denied: Only the owner Inspector can finalize this inspection.');
+    }
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.message || 'Failed to finalize inspection.');
+  }
+
+  const json = await response.json();
+  return { inspection: json.data, auditEventId: json.auditEventId };
 }
 

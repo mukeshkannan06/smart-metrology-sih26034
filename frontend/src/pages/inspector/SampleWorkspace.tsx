@@ -70,6 +70,7 @@ import {
 } from '../../services/ruleService';
 import { CameraCaptureModal } from '../../components/camera/CameraCaptureModal';
 import { RuleEvaluationPanel } from '../../components/rules/RuleEvaluationPanel';
+import { InspectionStepper } from '../../components/inspection/InspectionStepper';
 
 export const SampleWorkspace: React.FC = () => {
   const { inspectionId, sampleId } = useParams<{ inspectionId: string; sampleId: string }>();
@@ -92,6 +93,8 @@ export const SampleWorkspace: React.FC = () => {
   // Phase 9 Camera & Image state
   const [isCameraModalOpen, setIsCameraModalOpen] = useState<boolean>(false);
   const [selectedImageForView, setSelectedImageForView] = useState<SampleImage | null>(null);
+  const [isModalImageLoading, setIsModalImageLoading] = useState<boolean>(true);
+  const [modalImageError, setModalImageError] = useState<boolean>(false);
   const [isDeletingImage, setIsDeletingImage] = useState<string | null>(null);
   const [imageActionError, setImageActionError] = useState<string | null>(null);
   const [imageActionSuccess, setImageActionSuccess] = useState<string | null>(null);
@@ -461,6 +464,14 @@ export const SampleWorkspace: React.FC = () => {
             )}
           </div>
         }
+      />
+
+      {/* 4-Stage Guided Inspection Stepper */}
+      <InspectionStepper
+        currentStage={2}
+        totalExpected={inspection?.samplesCount || allSamples.length}
+        totalCreated={allSamples.length}
+        isCompleted={inspection?.status === 'COMPLETED'}
       />
 
       {/* Save Success Alert */}
@@ -1110,7 +1121,11 @@ export const SampleWorkspace: React.FC = () => {
                       >
                         {/* Image Preview Container */}
                         <div
-                          onClick={() => setSelectedImageForView(img)}
+                          onClick={() => {
+                            setSelectedImageForView(img);
+                            setIsModalImageLoading(true);
+                            setModalImageError(false);
+                          }}
                           className="relative h-32 bg-slate-900 cursor-pointer overflow-hidden flex items-center justify-center"
                         >
                           <img
@@ -1118,7 +1133,16 @@ export const SampleWorkspace: React.FC = () => {
                             alt={`Specimen #${currentSample.sampleNumber} Image #${img.sequence}`}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                             loading="lazy"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                              const fallback = (e.target as HTMLElement).parentElement?.querySelector('.img-thumbnail-fallback');
+                              if (fallback) fallback.classList.remove('hidden');
+                            }}
                           />
+                          <div className="img-thumbnail-fallback hidden absolute inset-0 flex flex-col items-center justify-center bg-slate-900 text-slate-400 p-2 text-center">
+                            <Camera className="w-5 h-5 text-slate-500 mb-1" />
+                            <span className="text-[10px] text-slate-400 font-medium">Specimen #{currentSample.sampleNumber}</span>
+                          </div>
                           <div className="absolute inset-0 bg-slate-950/20 group-hover:bg-slate-950/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
                             <span className="p-1.5 rounded-full bg-white/90 text-slate-900 shadow-sm">
                               <Maximize2 className="w-3.5 h-3.5" />
@@ -1356,6 +1380,86 @@ export const SampleWorkspace: React.FC = () => {
         </Card>
       )}
 
+      {/* GUIDED PIPELINE FORWARD ACTION BAR */}
+      {inspection && currentSample && (
+        <Card className="border-blue-200 bg-gradient-to-r from-slate-50 via-blue-50/50 to-slate-50 shadow-2xs">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-blue-600 text-white rounded-lg flex-shrink-0">
+                <Layers className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-800">
+                  Specimen #{currentSample.sampleNumber} of {inspection.samplesCount} Examination
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  {nextSample
+                    ? `Ready to proceed to Specimen #${nextSample.sampleNumber}.`
+                    : allSamples.length < inspection.samplesCount
+                    ? `Register the next specimen (${allSamples.length + 1} of ${inspection.samplesCount}).`
+                    : 'All planned package specimens have been created for this case.'}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/inspector/inspections/${inspection._id}`)}
+                icon={<ArrowLeft className="w-3.5 h-3.5" />}
+              >
+                Case Overview
+              </Button>
+
+              {nextSample ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => navigateToSample(nextSample)}
+                  icon={<ArrowRight className="w-3.5 h-3.5" />}
+                  className="bg-blue-600 hover:bg-blue-700 font-semibold shadow-xs"
+                >
+                  Proceed to Specimen #{nextSample.sampleNumber} ➔
+                </Button>
+              ) : allSamples.length < inspection.samplesCount ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={isCreatingNext}
+                  onClick={async () => {
+                    try {
+                      setIsCreatingNext(true);
+                      const res = await createSample(inspection._id);
+                      setAllSamples((prev) => [...prev, res.sample]);
+                      navigate(`/inspector/inspections/${inspection._id}/samples/${res.sample._id}`);
+                    } catch (err: unknown) {
+                      setError(err instanceof Error ? err.message : 'Failed to create next sample.');
+                    } finally {
+                      setIsCreatingNext(false);
+                    }
+                  }}
+                  icon={isCreatingNext ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlusCircle className="w-3.5 h-3.5" />}
+                  className="bg-blue-600 hover:bg-blue-700 font-semibold shadow-xs"
+                >
+                  {isCreatingNext ? 'Creating Next Unit...' : `+ Add & Examine Specimen #${allSamples.length + 1} ➔`}
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => navigate(`/inspector/inspections/${inspection._id}`)}
+                  icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+                  className="bg-emerald-600 hover:bg-emerald-700 font-semibold shadow-xs"
+                >
+                  All Samples Complete — Review & Finalize ➔
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Phase 9 Camera Capture Modal */}
       {currentSample && (
         <CameraCaptureModal
@@ -1406,12 +1510,48 @@ export const SampleWorkspace: React.FC = () => {
             </div>
 
             {/* Viewer Body */}
-            <div className="p-4 flex items-center justify-center bg-slate-950 overflow-auto flex-1">
-              <img
-                src={getSampleImageUrl(inspection._id, currentSample._id, selectedImageForView.imageId)}
-                alt={`Full view ${selectedImageForView.fileName || 'specimen photo'}`}
-                className="max-h-[70vh] w-auto object-contain rounded-lg shadow-lg"
-              />
+            <div className="p-4 flex items-center justify-center bg-slate-950 overflow-auto flex-1 min-h-[360px] relative">
+              {isModalImageLoading && !modalImageError && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-2.5 bg-slate-950/90 z-10">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+                  <span className="text-xs font-medium text-slate-300">Streaming specimen photo...</span>
+                </div>
+              )}
+
+              {modalImageError ? (
+                <div className="flex flex-col items-center justify-center text-center p-6 text-slate-400 max-w-sm">
+                  <AlertTriangle className="w-10 h-10 text-amber-400 mb-2.5" />
+                  <h4 className="text-sm font-semibold text-slate-200">Specimen photo not available</h4>
+                  <p className="text-xs text-slate-400 mt-1">
+                    The temporary file on your local server may have been purged or the session token expired.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-4 border-slate-700 text-slate-300 hover:bg-slate-800"
+                    onClick={() => {
+                      setModalImageError(false);
+                      setIsModalImageLoading(true);
+                    }}
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                    Retry
+                  </Button>
+                </div>
+              ) : (
+                <img
+                  src={getSampleImageUrl(inspection._id, currentSample._id, selectedImageForView.imageId)}
+                  alt={`Full view ${selectedImageForView.fileName || 'specimen photo'}`}
+                  className={`max-h-[70vh] w-auto object-contain rounded-lg shadow-lg transition-opacity duration-200 ${
+                    isModalImageLoading ? 'opacity-0' : 'opacity-100'
+                  }`}
+                  onLoad={() => setIsModalImageLoading(false)}
+                  onError={() => {
+                    setIsModalImageLoading(false);
+                    setModalImageError(true);
+                  }}
+                />
+              )}
             </div>
 
             {/* Viewer Footer */}

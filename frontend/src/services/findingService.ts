@@ -283,3 +283,53 @@ export async function correctFinding(
   return json.data;
 }
 
+export interface ViolationObservationRecord {
+  _id: string;
+  findingId: string;
+  inspectionId: string;
+  inspectionNumber: string;
+  commodity: string;
+  brand?: string | null;
+  packageContext: string;
+  location?: string | null;
+  inspectorId: string;
+  sampleId: string;
+  sampleCode: string;
+  ruleId: string;
+  ruleReference: string;
+  ruleFamily: string;
+  declarationType: string;
+  requirementDescription: string;
+  candidateStatus: string;
+  status: string;
+  isVerified: boolean;
+  isCorrected: boolean;
+  aiValue: string | null;
+  verifiedValue: string | null;
+  reason?: string | null;
+  evidenceImageIds: string[];
+  notes?: string | null;
+  verifiedByName?: string | null;
+  verifiedAt?: string | null;
+  createdAt: string;
+}
+
+/**
+ * Retrieves all violations, non-compliances, and discrepancies recorded for current user's inspections.
+ */
+export async function fetchInspectorViolations(): Promise<ViolationObservationRecord[]> {
+  const response = await fetch(getApiUrl('/api/findings/violations'), {
+    method: 'GET',
+    credentials: 'include',
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.message || 'Failed to retrieve inspector violations.');
+  }
+
+  const json = await response.json();
+  return json.data;
+}
+

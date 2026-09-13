@@ -30,6 +30,13 @@ router.get('/', InspectionController.listInspections);
  */
 router.get('/:id', InspectionController.getInspectionById);
 
+/**
+ * @route   PATCH /api/inspections/:id/finalize
+ * @desc    Formally finalize and seal an inspection case with status COMPLETED
+ * @access  Private (Owner Inspector only; Controller gets 403)
+ */
+router.patch('/:id/finalize', requireRole(UserRole.INSPECTOR), InspectionController.finalizeInspection);
+
 // Mount Sample sub-routes under /:inspectionId/samples
 router.use('/:inspectionId/samples', sampleRoutes);
 

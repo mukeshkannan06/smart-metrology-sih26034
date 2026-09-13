@@ -14,6 +14,9 @@ router.get('/inspections/:inspectionId', FindingController.getInspectionFindings
 // GET findings for a specific sample
 router.get('/samples/:sampleId', FindingController.getSampleFindings);
 
+// GET all violations and potential non-compliances for current user
+router.get('/violations', FindingController.getViolations);
+
 // GET a single finding by ID
 router.get('/:findingId', FindingController.getFindingById);
 

@@ -449,9 +449,9 @@ async function runTests() {
 
     // Pillar 6: Final officer determinations, statutory disclaimer, and cryptographic verification hash
     assert(
-      dto.legalDisclaimer.includes('Legal Metrology Act, 2009') &&
+      dto.legalDisclaimer.includes('Legal Metrology (Packaged Commodities) Rules, 2011') &&
         dto.legalDisclaimer.includes('assistive'),
-      'Pillar 6: Statutory disclaimer references Legal Metrology Act, 2009 and assistive status'
+      'Pillar 6: Statutory disclaimer references Legal Metrology (Packaged Commodities) Rules, 2011 and assistive status'
     );
     assert(
       typeof dto.systemIdentity.verificationHash === 'string' &&

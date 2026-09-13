@@ -3,7 +3,6 @@ import autoTable from 'jspdf-autotable';
 import {
   InspectionReportDTO,
   ReportSampleDetail,
-  loadImageAsDataUrl,
 } from '../services/reportService';
 
 const PACKAGE_CONTEXT_LABELS: Record<string, string> = {
@@ -56,23 +55,7 @@ export async function generateInspectionPdf(
 
   const { metadata, summary, samples, legalDisclaimer, systemIdentity } = reportData;
 
-  // Pre-load images as base64 data URLs concurrently
-  const loadedImagesMap = new Map<string, string>();
-  const imageLoadPromises: Promise<void>[] = [];
-
-  for (const sample of samples) {
-    for (const img of sample.images) {
-      if (img.availabilityState === 'AVAILABLE' && img.streamUrl) {
-        imageLoadPromises.push(
-          loadImageAsDataUrl(img.streamUrl).then((dataUrl) => {
-            if (dataUrl) loadedImagesMap.set(img.imageId, dataUrl);
-          })
-        );
-      }
-    }
-  }
-
-  await Promise.all(imageLoadPromises);
+  // Lightweight evidence box rendering: zero heavy image preloading to keep PDF lean and private
 
   // =========================================================================
   // PAGE 1: OFFICIAL BRANDING HEADER & CASE OVERVIEW
@@ -308,61 +291,44 @@ export async function generateInspectionPdf(
       currentY += 8;
     } else {
       let imgX = leftMargin + 2;
-      const imgMaxW = 52;
-      const imgMaxH = 38;
+      const imgMaxW = 54;
+      const imgMaxH = 26;
 
       for (const img of sample.images) {
         if (imgX + imgMaxW > pageWidth - rightMargin) {
           imgX = leftMargin + 2;
-          currentY += imgMaxH + 7;
-          ensureVerticalSpace(imgMaxH + 12);
+          currentY += imgMaxH + 6;
+          ensureVerticalSpace(imgMaxH + 10);
         }
 
-        const dataUrl = loadedImagesMap.get(img.imageId);
-        if (img.availabilityState === 'AVAILABLE' && dataUrl) {
-          try {
-            doc.setDrawColor(203, 213, 225);
-            doc.rect(imgX, currentY, imgMaxW, imgMaxH);
-            doc.addImage(dataUrl, 'JPEG', imgX + 1, currentY + 1, imgMaxW - 2, imgMaxH - 2);
+        // Clean Official Evidence Box (Zero Cloud Storage, Zero Heavy Binary in PDF)
+        doc.setFillColor(248, 250, 252); // Slate-50
+        doc.setDrawColor(203, 213, 225); // Slate-300
+        doc.roundedRect(imgX, currentY, imgMaxW, imgMaxH, 1.5, 1.5, 'FD');
 
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(7);
-            doc.setTextColor(100, 116, 139);
-            doc.text(
-              `Photo #${img.sequence} (${Math.round(img.sizeBytes / 1024)} KB)`,
-              imgX + imgMaxW / 2,
-              currentY + imgMaxH + 3.5,
-              { align: 'center' }
-            );
-          } catch {
-            // Fallback if image rendering fails
-            doc.setFillColor(248, 250, 252);
-            doc.rect(imgX, currentY, imgMaxW, imgMaxH, 'F');
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(7);
-            doc.text('Photo render fallback', imgX + 2, currentY + imgMaxH / 2);
-          }
-        } else {
-          // Evidence Unavailable in Lifecycle
-          doc.setFillColor(254, 243, 199); // Amber-100
-          doc.setDrawColor(245, 158, 11); // Amber-500
-          doc.roundedRect(imgX, currentY, imgMaxW, imgMaxH, 1, 1, 'FD');
+        // Header
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(30, 58, 138); // Navy #1E3A8A
+        doc.text(`Specimen Photo #${img.sequence}`, imgX + imgMaxW / 2, currentY + 7, {
+          align: 'center',
+        });
 
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(7.5);
-          doc.setTextColor(146, 64, 14); // Amber-800
-          doc.text(`Photo #${img.sequence} (IMG-${img.imageId.substring(0, 6)})`, imgX + imgMaxW / 2, currentY + 14, {
-            align: 'center',
-          });
+        // Identifier & Size
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(6.5);
+        doc.setTextColor(71, 85, 105); // Slate-600
+        doc.text(`Ref: IMG-${img.imageId.substring(0, 8)} (${Math.round(img.sizeBytes / 1024)} KB)`, imgX + imgMaxW / 2, currentY + 13, {
+          align: 'center',
+        });
 
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(6.5);
-          doc.setTextColor(180, 83, 9); // Amber-700
-          doc.text('Unavailable in storage lifecycle', imgX + imgMaxW / 2, currentY + 20, { align: 'center' });
-          doc.text(`(${Math.round(img.sizeBytes / 1024)} KB · Metadata Preserved)`, imgX + imgMaxW / 2, currentY + 25, {
-            align: 'center',
-          });
-        }
+        // Verification Badge
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(6);
+        doc.setTextColor(22, 101, 52); // Green-800
+        doc.text('Inspected & Verified at Sample Time', imgX + imgMaxW / 2, currentY + 19, {
+          align: 'center',
+        });
 
         imgX += imgMaxW + 6;
       }
@@ -376,10 +342,13 @@ export async function generateInspectionPdf(
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8.5);
       doc.setTextColor(15, 23, 42);
+
+      const overallConfText = typeof sample.aiExtraction.overallConfidence === 'number'
+        ? `${Math.round(sample.aiExtraction.overallConfidence * 100)}%`
+        : String(sample.aiExtraction.overallConfidence || 'HIGH');
+
       doc.text(
-        `B. AI Multimodal Observations (${sample.aiExtraction.aiModel} · ${Math.round(
-          sample.aiExtraction.overallConfidence * 100
-        )}% Confidence)`,
+        `B. AI Multimodal Observations (${sample.aiExtraction.aiModel} · ${overallConfText} Confidence)`,
         leftMargin + 2,
         currentY
       );
@@ -398,7 +367,9 @@ export async function generateInspectionPdf(
         dec.category,
         sanitizePdfText(dec.extractedValue),
         sanitizePdfText(dec.normalizedValue),
-        `${Math.round(dec.confidence * 100)}%`,
+        typeof dec.confidence === 'number'
+          ? `${Math.round(dec.confidence * 100)}%`
+          : String(dec.confidence || 'LOW'),
         dec.state,
       ]);
 

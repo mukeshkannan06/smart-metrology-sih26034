@@ -1,4 +1,4 @@
-import { getApiUrl, getAuthHeaders } from './apiConfig';
+import { getApiUrl, getAuthHeaders, getStoredAuthToken } from './apiConfig';
 
 export enum SampleStatus {
   PENDING = 'PENDING',
@@ -312,13 +312,20 @@ export async function fetchSampleImages(
 
 /**
  * Generates an authenticated endpoint URL to stream an image.
+ * Automatically appends the active session token query parameter for HTML <img> rendering.
  */
 export function getSampleImageUrl(
   inspectionId: string,
   sampleId: string,
   imageId: string
 ): string {
-  return getApiUrl(`/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(sampleId)}/images/${encodeURIComponent(imageId)}`);
+  const baseUrl = getApiUrl(`/api/inspections/${encodeURIComponent(inspectionId)}/samples/${encodeURIComponent(sampleId)}/images/${encodeURIComponent(imageId)}`);
+  const token = getStoredAuthToken();
+  if (token) {
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    return `${baseUrl}${separator}token=${encodeURIComponent(token)}`;
+  }
+  return baseUrl;
 }
 
 /**

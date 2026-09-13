@@ -16,6 +16,7 @@ export const createApp = (): Express => {
     helmet({
       contentSecurityPolicy: config.isProduction ? undefined : false,
       crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
     })
   );
 

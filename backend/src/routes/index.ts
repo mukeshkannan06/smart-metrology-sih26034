@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { requireAuth } from '../middleware/auth.middleware';
+import { SampleController } from '../controllers/sample.controller';
 import healthRoutes from './health.routes';
 import authRoutes from './auth.routes';
 import dashboardRoutes from './dashboard.routes';
@@ -41,6 +43,10 @@ apiRouter.use('/reports', reportRoutes);
 
 // Mount Supervisory Analytics endpoints (/api/analytics/...)
 apiRouter.use('/analytics', analyticsRoutes);
+
+// Mount Direct Sample Image streaming endpoints (/api/samples/:sampleId/images/:imageId[/file])
+apiRouter.get('/samples/:sampleId/images/:imageId', requireAuth, SampleController.streamImage);
+apiRouter.get('/samples/:sampleId/images/:imageId/file', requireAuth, SampleController.streamImage);
 
 export default apiRouter;
 

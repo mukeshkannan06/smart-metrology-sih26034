@@ -20,16 +20,21 @@ import {
   CheckCircle,
   ShieldCheck,
   Eye,
+  FileText,
+  X,
+  Check,
 } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card, CardHeader, CardContent } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
+import { InspectionStepper } from '../../components/inspection/InspectionStepper';
 import {
   InspectionData,
   InspectionStatus,
   PACKAGE_CONTEXT_DEFINITIONS,
   fetchInspectionById,
+  finalizeInspection,
 } from '../../services/inspectionService';
 import {
   SampleData,
@@ -51,6 +56,14 @@ export const InspectionWorkspace: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [sampleError, setSampleError] = useState<string | null>(null);
   const [isAddingSample, setIsAddingSample] = useState<boolean>(false);
+
+  // Option B: Case Finalization state
+  const [isFinalizeModalOpen, setIsFinalizeModalOpen] = useState<boolean>(false);
+  const [isFinalizing, setIsFinalizing] = useState<boolean>(false);
+  const [finalizeRemarks, setFinalizeRemarks] = useState<string>('');
+  const [finalizeSuccess, setFinalizeSuccess] = useState<string | null>(null);
+  const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  const [attestationConfirmed, setAttestationConfirmed] = useState<boolean>(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -109,7 +122,7 @@ export const InspectionWorkspace: React.FC = () => {
   }, [id]);
 
   const handleAddSample = async () => {
-    if (!inspection) return;
+    if (!inspection || inspection.status === InspectionStatus.COMPLETED) return;
 
     setIsAddingSample(true);
     setSampleError(null);
@@ -124,6 +137,30 @@ export const InspectionWorkspace: React.FC = () => {
       setSampleError(err instanceof Error ? err.message : 'Failed to add sample.');
     } finally {
       setIsAddingSample(false);
+    }
+  };
+
+  const handleFinalize = async () => {
+    if (!inspection) return;
+    if (!attestationConfirmed) {
+      setFinalizeError('Please check the attestation verification box before sealing.');
+      return;
+    }
+
+    try {
+      setIsFinalizing(true);
+      setFinalizeError(null);
+      const res = await finalizeInspection(inspection._id, finalizeRemarks);
+      setInspection(res.inspection);
+      setIsFinalizeModalOpen(false);
+      setFinalizeSuccess(
+        `Inspection ${res.inspection.inspectionNumber} officially finalized and sealed with status COMPLETED.`
+      );
+      setTimeout(() => setFinalizeSuccess(null), 8000);
+    } catch (err: unknown) {
+      setFinalizeError(err instanceof Error ? err.message : 'Failed to finalize inspection.');
+    } finally {
+      setIsFinalizing(false);
     }
   };
 
@@ -226,6 +263,112 @@ export const InspectionWorkspace: React.FC = () => {
           </div>
         }
       />
+
+      {/* 4-Stage Guided Inspection Stepper */}
+      <InspectionStepper
+        currentStage={
+          inspection.status === InspectionStatus.COMPLETED
+            ? 4
+            : progress?.isComplete
+            ? 4
+            : 2
+        }
+        totalExpected={inspection.samplesCount}
+        totalCreated={progress?.totalCreated || samples.length}
+        isCompleted={inspection.status === InspectionStatus.COMPLETED}
+      />
+
+      {/* Success Notification */}
+      {finalizeSuccess && (
+        <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-950 flex items-center justify-between shadow-xs">
+          <div className="flex items-center space-x-2.5">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+            <span className="font-semibold">{finalizeSuccess}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/inspector/dashboard')}
+            className="border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+          >
+            View Dashboard (Completed) ➔
+          </Button>
+        </div>
+      )}
+
+      {/* OPTION B: Finalization Prompt Card (When all samples added, pending officer sign-off) */}
+      {progress?.isComplete && inspection.status !== InspectionStatus.COMPLETED && (
+        <Card className="border-emerald-300 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 shadow-xs">
+          <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2">
+                <span className="inline-flex items-center justify-center p-1 rounded-full bg-emerald-600 text-white">
+                  <Check className="w-3.5 h-3.5" />
+                </span>
+                <span className="text-sm font-bold text-emerald-950">
+                  Sampling Target Complete ({progress.totalCreated} of {progress.totalExpected} Units Examined)
+                </span>
+              </div>
+              <p className="text-xs text-emerald-900/90 max-w-xl">
+                All intended package specimens have been registered and examined. As the inspecting officer, you can now formally attest the findings, seal the case, and generate the official report for the Assistant Controller.
+              </p>
+            </div>
+            <div className="flex items-center space-x-2 flex-shrink-0">
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => {
+                  setAttestationConfirmed(false);
+                  setFinalizeError(null);
+                  setIsFinalizeModalOpen(true);
+                }}
+                icon={<ShieldCheck className="w-4 h-4" />}
+                className="bg-emerald-600 hover:bg-emerald-700 font-semibold shadow-xs"
+              >
+                ✓ Finalize Inspection & Submit
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* CASE SEALED BANNER (When case is COMPLETED) */}
+      {inspection.status === InspectionStatus.COMPLETED && (
+        <div className="p-4 bg-emerald-50/90 border border-emerald-300 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start sm:items-center space-x-3">
+            <div className="p-2 bg-emerald-600 text-white rounded-lg flex-shrink-0">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-bold text-xs text-emerald-950 flex items-center space-x-2">
+                <span>Inspection Case Formally Finalized & Sealed</span>
+                <Badge variant="success">COMPLETED</Badge>
+              </div>
+              <p className="text-[11px] text-emerald-800 mt-0.5">
+                Statutory attestation logged in audit trail. Case is permanently recorded and available to supervisory officials.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2 flex-shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/inspector/generate-pdf/${inspection._id}`)}
+              icon={<FileText className="w-3.5 h-3.5 text-emerald-700" />}
+              className="border-emerald-300 text-emerald-900 hover:bg-emerald-100"
+            >
+              Generate Sealed PDF
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => navigate('/inspector/dashboard')}
+            >
+              Back to Dashboard
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Main Metadata Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -557,6 +700,114 @@ export const InspectionWorkspace: React.FC = () => {
           </div>
         </div>
       </div>
+      {/* OPTION B: Officer Attestation & Finalization Modal */}
+      {isFinalizeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Finalize & Seal Inspection Case
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Case {inspection.inspectionNumber} • Legal Metrology Attestation
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsFinalizeModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              {finalizeError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-900 flex items-start space-x-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                  <span>{finalizeError}</span>
+                </div>
+              )}
+
+              {/* Case Summary Matrix */}
+              <div className="grid grid-cols-2 gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Commodity</span>
+                  <div className="font-bold text-slate-800">{inspection.commodity}</div>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Package Context</span>
+                  <div className="font-bold text-slate-800">{contextMeta?.label || inspection.packageContext}</div>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Sample Scope</span>
+                  <div className="font-bold text-slate-800">{progress?.totalCreated || samples.length} / {inspection.samplesCount} Units Examined</div>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Location</span>
+                  <div className="font-bold text-slate-800 truncate">{inspection.location}</div>
+                </div>
+              </div>
+
+              {/* Remarks Field */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-slate-700">
+                  Officer Closing Attestation / Field Notes (Optional)
+                </label>
+                <textarea
+                  value={finalizeRemarks}
+                  onChange={(e) => setFinalizeRemarks(e.target.value)}
+                  placeholder="e.g., Physical packaging examined on premises; mandatory declarations verified per Legal Metrology Rules."
+                  rows={2}
+                  className="w-full text-xs p-2.5 rounded-lg border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Mandatory Attestation Checkbox */}
+              <label className="flex items-start space-x-3 p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={attestationConfirmed}
+                  onChange={(e) => {
+                    setAttestationConfirmed(e.target.checked);
+                    if (finalizeError) setFinalizeError(null);
+                  }}
+                  className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                />
+                <span className="text-[11px] text-emerald-950 leading-relaxed font-medium">
+                  I hereby certify that all {inspection.samplesCount} package specimens have been physically inspected, AI multimodal observations reviewed, and compliance findings evaluated in compliance with <strong>The Legal Metrology (Packaged Commodities) Rules, 2011</strong>.
+                </span>
+              </label>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end space-x-2.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsFinalizeModalOpen(false)}
+                disabled={isFinalizing}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleFinalize}
+                disabled={isFinalizing || !attestationConfirmed}
+                icon={isFinalizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                className="bg-emerald-600 hover:bg-emerald-700 font-semibold"
+              >
+                {isFinalizing ? 'Sealing Case...' : 'Confirm & Seal Inspection'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

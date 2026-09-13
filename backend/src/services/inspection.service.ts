@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { Inspection, IInspection, PackageContext, InspectionStatus, UserRole } from '../models';
+import { Inspection, IInspection, Sample, PackageContext, InspectionStatus, UserRole } from '../models';
 import { escapeRegex } from '../utils/securitySanitizer';
 
 export interface CreateInspectionDTO {
@@ -181,6 +181,96 @@ export class InspectionService {
     }
 
     return { inspection, forbidden: false };
+  }
+
+  /**
+   * Finalizes an inspection case: validates officer ownership and sample scope,
+   * transitions status to COMPLETED, and records an immutable audit event.
+   */
+  static async finalizeInspection(
+    idOrNumber: string,
+    user: UserContext,
+    remarks?: string
+  ): Promise<{ inspection: IInspection; auditEventId: string }> {
+    const { inspection, forbidden } = await this.getInspectionById(idOrNumber, user);
+
+    if (forbidden) {
+      const err = new Error('Access Denied: You do not have permission to finalize this inspection.');
+      (err as any).statusCode = 403;
+      throw err;
+    }
+
+    if (!inspection) {
+      const err = new Error(`Inspection '${idOrNumber}' not found.`);
+      (err as any).statusCode = 404;
+      throw err;
+    }
+
+    if (inspection.status === InspectionStatus.COMPLETED) {
+      return { inspection, auditEventId: '' };
+    }
+
+    // Validate that all planned sample units have been created
+    const samplesCount = await Sample.countDocuments({ inspectionId: inspection._id });
+    if (samplesCount < inspection.samplesCount) {
+      const err = new Error(
+        `Cannot finalize inspection: Target sample scope is ${inspection.samplesCount} units, but only ${samplesCount} units have been created.`
+      );
+      (err as any).statusCode = 400;
+      throw err;
+    }
+
+    const previousStatus = inspection.status;
+    inspection.status = InspectionStatus.COMPLETED;
+    if (remarks && typeof remarks === 'string' && remarks.trim() !== '') {
+      inspection.remarks = inspection.remarks
+        ? `${inspection.remarks} | Final Attestation: ${remarks.trim()}`
+        : `Final Attestation: ${remarks.trim()}`;
+    }
+
+    const saved = await inspection.save();
+    let auditEventId = '';
+
+    try {
+      const { AuditService } = await import('./audit.service');
+      const { AuditEventType } = await import('../models/AuditEvent');
+      const auditEvent = await AuditService.recordEvent({
+        eventType: AuditEventType.INSPECTION_STATUS_CHANGED,
+        entityType: 'INSPECTION',
+        entityId: saved._id.toString(),
+        inspectionId: saved._id,
+        actorUserId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        source: 'USER',
+        action: 'Finalized & Sealed Inspection',
+        description: `Inspection ${saved.inspectionNumber} officially finalized and marked COMPLETED with ${samplesCount} sample units.`,
+        beforeState: { status: previousStatus },
+        afterState: { status: saved.status },
+      });
+      auditEventId = auditEvent ? auditEvent._id.toString() : '';
+    } catch (auditErr) {
+      console.warn('Audit trail logging failed for finalizeInspection:', auditErr);
+    }
+
+    // Purge physical temporary image files from local disk upon formal case completion (Zero local retention)
+    try {
+      const childSamples = await Sample.find({ inspectionId: inspection._id }).select('images');
+      const { removeTemporaryImage } = await import('../utils/tempStorage');
+      for (const s of childSamples) {
+        if (s.images && s.images.length > 0) {
+          for (const img of s.images) {
+            if (img.temporaryReference) {
+              removeTemporaryImage(img.temporaryReference);
+            }
+          }
+        }
+      }
+    } catch (cleanupErr) {
+      console.warn('[INSPECTION_SERVICE] Post-finalization temp image cleanup non-critical error:', cleanupErr);
+    }
+
+    return { inspection: saved, auditEventId };
   }
 }
 

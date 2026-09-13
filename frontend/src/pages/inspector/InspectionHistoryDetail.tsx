@@ -23,6 +23,7 @@ import { Card, CardHeader, CardContent } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { getApiUrl, getStoredAuthToken } from '../../services/apiConfig';
 import {
   fetchHistoricalInspectionDetail,
   HistoricalInspectionDetail,
@@ -58,6 +59,17 @@ export const InspectionHistoryDetail: React.FC = () => {
   const [findingScope, setFindingScope] = useState<'APPLICABLE' | 'EXEMPT' | 'ALL'>('APPLICABLE');
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  const resolveAuthenticatedStreamUrl = (streamUrl: string | null): string => {
+    if (!streamUrl) return '';
+    const fullUrl = getApiUrl(streamUrl);
+    const token = getStoredAuthToken();
+    if (token) {
+      const separator = fullUrl.includes('?') ? '&' : '?';
+      return `${fullUrl}${separator}token=${encodeURIComponent(token)}`;
+    }
+    return fullUrl;
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -408,12 +420,15 @@ export const InspectionHistoryDetail: React.FC = () => {
                                 {img.availabilityState === 'AVAILABLE' && img.streamUrl ? (
                                   <div
                                     className="w-full h-24 bg-slate-100 rounded overflow-hidden flex items-center justify-center cursor-pointer hover:opacity-90"
-                                    onClick={() => setPreviewImage(img.streamUrl)}
+                                    onClick={() => setPreviewImage(resolveAuthenticatedStreamUrl(img.streamUrl))}
                                   >
                                     <img
-                                      src={img.streamUrl}
+                                      src={resolveAuthenticatedStreamUrl(img.streamUrl)}
                                       alt={`Evidence #${img.sequence}`}
                                       className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        (e.target as HTMLElement).style.display = 'none';
+                                      }}
                                     />
                                   </div>
                                 ) : (
@@ -647,8 +662,17 @@ export const InspectionHistoryDetail: React.FC = () => {
                           </span>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <span className="text-xs text-slate-600 font-semibold">
-                            Confidence: {Math.round((ext.overallConfidence || 0) * 100)}%
+                          <span className="text-xs text-slate-500 font-medium">Confidence:</span>
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold ${
+                              String(ext.overallConfidence).toUpperCase() === 'HIGH'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : String(ext.overallConfidence).toUpperCase() === 'MEDIUM'
+                                ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                : 'bg-rose-100 text-rose-800 border border-rose-200'
+                            }`}
+                          >
+                            {String(ext.overallConfidence || 'LOW').toUpperCase()}
                           </span>
                           <Badge variant={ext.status === 'COMPLETED' ? 'success' : 'warning'}>
                             {ext.status}
@@ -689,13 +713,23 @@ export const InspectionHistoryDetail: React.FC = () => {
                                   {dec.category}
                                 </td>
                                 <td className="py-2 px-3 font-mono text-slate-700">
-                                  {dec.extractedValue || <span className="text-slate-400">N/A</span>}
+                                  {dec.extractedValue || dec.rawValue || <span className="text-slate-400">N/A</span>}
                                 </td>
                                 <td className="py-2 px-3 font-mono text-slate-600">
                                   {dec.normalizedValue || <span className="text-slate-400">—</span>}
                                 </td>
-                                <td className="py-2 px-3 text-slate-600">
-                                  {Math.round((dec.confidence || 0) * 100)}%
+                                <td className="py-2 px-3">
+                                  <span
+                                    className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
+                                      String(dec.confidence).toUpperCase() === 'HIGH'
+                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                        : String(dec.confidence).toUpperCase() === 'MEDIUM'
+                                        ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                        : 'bg-rose-100 text-rose-800 border border-rose-200'
+                                    }`}
+                                  >
+                                    {String(dec.confidence || 'LOW').toUpperCase()}
+                                  </span>
                                 </td>
                                 <td className="py-2 px-3">
                                   <span className="text-[10px] px-2 py-0.5 rounded font-semibold bg-slate-100 text-slate-700">

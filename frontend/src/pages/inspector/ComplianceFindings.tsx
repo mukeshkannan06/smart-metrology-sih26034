@@ -138,6 +138,8 @@ export const ComplianceFindings: React.FC = () => {
 
   // 1-Click Verification State
   const [verifyingFindingId, setVerifyingFindingId] = useState<string | null>(null);
+  const [verifyingRuleId, setVerifyingRuleId] = useState<string | null>(null);
+  const [applyCorrectionToGroup, setApplyCorrectionToGroup] = useState<boolean>(true);
   const [showPassedDetails, setShowPassedDetails] = useState<boolean>(false);
   const [correctionDecision, setCorrectionDecision] = useState<InspectorVerificationDecision | null>(null);
   const [isVerifyingAllPassed, setIsVerifyingAllPassed] = useState<boolean>(false);
@@ -286,6 +288,73 @@ export const ComplianceFindings: React.FC = () => {
     }
   };
 
+  // Group Direct 1-Click Verification Handler (for All Samples view)
+  const handleGroupDirectVerify = async (
+    groupFindings: ComplianceFindingData[],
+    decision: InspectorVerificationDecision
+  ) => {
+    if (groupFindings.length === 0) return;
+    const ruleId = groupFindings[0].ruleId;
+    const ruleRef = groupFindings[0].ruleReference;
+
+    try {
+      setVerifyingRuleId(ruleId);
+
+      // Metrology Principle: Statutory compliance is commodity-wide.
+      // Target ALL specimens of this rule across the inspection to ensure complete synchronization.
+      const targetFindings = findings.filter(
+        (f) =>
+          (ruleId && f.ruleId === ruleId) ||
+          (ruleRef && f.ruleReference === ruleRef)
+      );
+      const itemsToUpdate = targetFindings.length > 0 ? targetFindings : groupFindings;
+
+      const updatePromises = itemsToUpdate.map((f) =>
+        verifyFinding(f._id, {
+          decision,
+          verifiedValue:
+            f.inspectorVerification.verifiedValue || f.aiObservation.extractedValue || undefined,
+          notes:
+            f.inspectorVerification.notes ||
+            (decision === InspectorVerificationDecision.VERIFIED_COMPLIANT
+              ? 'Statutory compliance confirmed across all sampled units'
+              : 'Statutory non-compliance confirmed across sampled units'),
+        })
+      );
+
+      const results = await Promise.all(updatePromises);
+      const updatedMap = new Map(results.map((r) => [r.finding._id, r.finding]));
+
+      setFindings((prev) =>
+        prev.map((f) => (updatedMap.has(f._id) ? updatedMap.get(f._id)! : f))
+      );
+
+      if (results.length > 0) {
+        setTelemetry(results[results.length - 1].telemetry);
+      }
+
+      const decisionLabel =
+        decision === InspectorVerificationDecision.VERIFIED_COMPLIANT
+          ? 'Verified Compliant'
+          : decision === InspectorVerificationDecision.VERIFIED_NON_COMPLIANT
+          ? 'Flagged Non-Compliance'
+          : 'Updated';
+
+      setFeedbackMessage({
+        type: 'success',
+        text: `Rule ${ruleRef} confirmed as ${decisionLabel} across all ${itemsToUpdate.length} specimens.`,
+      });
+      setTimeout(() => setFeedbackMessage(null), 3500);
+    } catch (err: any) {
+      setFeedbackMessage({
+        type: 'error',
+        text: err.message || 'Failed to submit group verification.',
+      });
+    } finally {
+      setVerifyingRuleId(null);
+    }
+  };
+
   // Open Correction & Notes Modal
   const handleOpenCorrection = (finding: ComplianceFindingData) => {
     setCorrectingFinding(finding);
@@ -294,6 +363,7 @@ export const ComplianceFindings: React.FC = () => {
     );
     setCorrectionNotesInput(finding.inspectorVerification.notes || '');
     setCorrectionDecision(finding.inspectorVerification.decision || null);
+    setApplyCorrectionToGroup(selectedSampleId === 'ALL');
   };
 
   // Submit Value Correction & Notes
@@ -302,33 +372,46 @@ export const ComplianceFindings: React.FC = () => {
 
     try {
       setIsSubmittingCorrection(true);
-      let updated = correctingFinding;
 
-      // 1. If value was edited
-      if (correctedValueInput.trim()) {
-        updated = await correctFinding(correctingFinding._id, {
-          correctedValue: correctedValueInput.trim(),
-          notes: correctionNotesInput.trim() || undefined,
-        });
-      }
+      const targetFindings =
+        selectedSampleId === 'ALL' && applyCorrectionToGroup
+          ? findings.filter((f) => f.ruleId === correctingFinding.ruleId)
+          : [correctingFinding];
 
-      // 2. If determination decision was also chosen
-      if (correctionDecision) {
-        const verifyRes = await verifyFinding(correctingFinding._id, {
-          decision: correctionDecision,
-          verifiedValue: correctedValueInput.trim() || undefined,
-          notes: correctionNotesInput.trim() || undefined,
-        });
-        updated = verifyRes.finding;
-        setTelemetry(verifyRes.telemetry);
-      }
+      const updatePromises = targetFindings.map(async (item) => {
+        let updated = item;
 
-      setFindings((prev) => prev.map((f) => (f._id === updated._id ? updated : f)));
+        // 1. If value was edited
+        if (correctedValueInput.trim()) {
+          updated = await correctFinding(item._id, {
+            correctedValue: correctedValueInput.trim(),
+            notes: correctionNotesInput.trim() || undefined,
+          });
+        }
+
+        // 2. If determination decision was also chosen
+        if (correctionDecision) {
+          const verifyRes = await verifyFinding(item._id, {
+            decision: correctionDecision,
+            verifiedValue: correctedValueInput.trim() || undefined,
+            notes: correctionNotesInput.trim() || undefined,
+          });
+          updated = verifyRes.finding;
+          setTelemetry(verifyRes.telemetry);
+        }
+
+        return updated;
+      });
+
+      const updatedList = await Promise.all(updatePromises);
+      const updatedMap = new Map(updatedList.map((u) => [u._id, u]));
+
+      setFindings((prev) => prev.map((f) => (updatedMap.has(f._id) ? updatedMap.get(f._id)! : f)));
 
       setFeedbackMessage({
         type: 'success',
-        text: `Observation & notes for ${updated.ruleReference} updated successfully.`,
-        findingId: updated._id,
+        text: `Observation & notes for ${correctingFinding.ruleReference} updated successfully across ${updatedList.length} specimen(s).`,
+        findingId: correctingFinding._id,
       });
       setTimeout(() => setFeedbackMessage(null), 3500);
 
@@ -483,27 +566,69 @@ export const ComplianceFindings: React.FC = () => {
         f.aiObservation.confidence !== 'LOW' &&
         !f.isCorrected;
 
-      // 1. Tab filter
+      // 1. Tab filter (Evaluated with Whole-Rule Integrity in Multi-Specimen view)
       if (filterTab === 'POTENTIAL_NON_COMPLIANCE') {
-        if (
-          f.candidateStatus !== FindingCandidateStatus.POTENTIAL_NON_COMPLIANCE &&
-          f.status !== FindingStatus.VERIFIED_NON_COMPLIANT
-        ) {
-          return false;
+        if (selectedSampleId === 'ALL' && samples.length > 1) {
+          const ruleKey = f.ruleId || f.ruleReference;
+          const ruleHasPnc = findings.some(
+            (other) =>
+              (other.ruleId === ruleKey || other.ruleReference === ruleKey) &&
+              (other.candidateStatus === FindingCandidateStatus.POTENTIAL_NON_COMPLIANCE ||
+                other.status === FindingStatus.VERIFIED_NON_COMPLIANT)
+          );
+          if (!ruleHasPnc) return false;
+        } else {
+          if (
+            f.candidateStatus !== FindingCandidateStatus.POTENTIAL_NON_COMPLIANCE &&
+            f.status !== FindingStatus.VERIFIED_NON_COMPLIANT
+          ) {
+            return false;
+          }
         }
       } else if (filterTab === 'REQUIRES_INSPECTOR_REVIEW') {
-        if (
-          f.candidateStatus !== FindingCandidateStatus.REQUIRES_INSPECTOR_REVIEW &&
-          f.status !== FindingStatus.VERIFIED_REQUIRES_FURTHER_REVIEW
-        ) {
-          return false;
+        if (selectedSampleId === 'ALL' && samples.length > 1) {
+          const ruleKey = f.ruleId || f.ruleReference;
+          const ruleHasReview = findings.some(
+            (other) =>
+              (other.ruleId === ruleKey || other.ruleReference === ruleKey) &&
+              (other.candidateStatus === FindingCandidateStatus.REQUIRES_INSPECTOR_REVIEW ||
+                other.status === FindingStatus.VERIFIED_REQUIRES_FURTHER_REVIEW)
+          );
+          if (!ruleHasReview) return false;
+        } else {
+          if (
+            f.candidateStatus !== FindingCandidateStatus.REQUIRES_INSPECTOR_REVIEW &&
+            f.status !== FindingStatus.VERIFIED_REQUIRES_FURTHER_REVIEW
+          ) {
+            return false;
+          }
         }
       } else if (filterTab === 'COMPLIANT_CANDIDATE') {
-        if (
-          f.candidateStatus !== FindingCandidateStatus.COMPLIANT_CANDIDATE &&
-          f.status !== FindingStatus.VERIFIED_COMPLIANT
-        ) {
-          return false;
+        if (selectedSampleId === 'ALL' && samples.length > 1) {
+          const ruleKey = f.ruleId || f.ruleReference;
+          const ruleHasDefect = findings.some(
+            (other) =>
+              (other.ruleId === ruleKey || other.ruleReference === ruleKey) &&
+              (other.candidateStatus === FindingCandidateStatus.POTENTIAL_NON_COMPLIANCE ||
+                other.status === FindingStatus.VERIFIED_NON_COMPLIANT ||
+                other.candidateStatus === FindingCandidateStatus.REQUIRES_INSPECTOR_REVIEW ||
+                other.status === FindingStatus.VERIFIED_REQUIRES_FURTHER_REVIEW ||
+                other.aiObservation.state === 'NOT_DETECTED')
+          );
+          if (ruleHasDefect) return false;
+          if (
+            f.candidateStatus !== FindingCandidateStatus.COMPLIANT_CANDIDATE &&
+            f.status !== FindingStatus.VERIFIED_COMPLIANT
+          ) {
+            return false;
+          }
+        } else {
+          if (
+            f.candidateStatus !== FindingCandidateStatus.COMPLIANT_CANDIDATE &&
+            f.status !== FindingStatus.VERIFIED_COMPLIANT
+          ) {
+            return false;
+          }
         }
       } else if (filterTab === 'VERIFIED') {
         if (!f.isVerified && !isCleanPass) return false;
@@ -528,29 +653,52 @@ export const ComplianceFindings: React.FC = () => {
   }, [findings, filterTab, searchQuery]);
 
   // Split findings into Attention-Required vs All-Clear Passed
+  // Under Legal Metrology Rules: If ANY specimen for a statutory rule has a defect or review requirement,
+  // the ENTIRE rule belongs in Attention-Required (Action Cards) and is never split into the passed checklist.
   const { attentionFindings, passedFindings } = useMemo(() => {
+    // 1. Group active filtered findings by statutory rule
+    const ruleGroups = new Map<string, ComplianceFindingData[]>();
+    filteredFindings.forEach((f) => {
+      const key = f.ruleId || f.ruleReference;
+      if (!ruleGroups.has(key)) {
+        ruleGroups.set(key, []);
+      }
+      ruleGroups.get(key)!.push(f);
+    });
+
     const attention: ComplianceFindingData[] = [];
     const passed: ComplianceFindingData[] = [];
 
-    filteredFindings.forEach((f) => {
-      const isAttention =
-        f.candidateStatus === FindingCandidateStatus.POTENTIAL_NON_COMPLIANCE ||
-        f.status === FindingStatus.VERIFIED_NON_COMPLIANT ||
-        f.candidateStatus === FindingCandidateStatus.REQUIRES_INSPECTOR_REVIEW ||
-        f.status === FindingStatus.VERIFIED_REQUIRES_FURTHER_REVIEW ||
-        f.aiObservation.state === 'NOT_DETECTED' ||
-        f.aiObservation.confidence === 'LOW' ||
-        f.isCorrected;
+    // 2. Evaluate rule by rule across all specimens
+    ruleGroups.forEach((groupItems) => {
+      const ruleHasAttention = groupItems.some((f) => {
+        return (
+          f.candidateStatus === FindingCandidateStatus.POTENTIAL_NON_COMPLIANCE ||
+          f.status === FindingStatus.VERIFIED_NON_COMPLIANT ||
+          f.candidateStatus === FindingCandidateStatus.REQUIRES_INSPECTOR_REVIEW ||
+          f.status === FindingStatus.VERIFIED_REQUIRES_FURTHER_REVIEW ||
+          f.aiObservation.state === 'NOT_DETECTED' ||
+          f.aiObservation.confidence === 'LOW' ||
+          f.isCorrected
+        );
+      });
 
-      if (isAttention) {
-        attention.push(f);
+      if (ruleHasAttention) {
+        // Under Legal Metrology rules, all specimens for a defective/review rule stay together
+        attention.push(...groupItems);
       } else {
-        passed.push(f);
+        // Clean passing rule (all specimens compliant)
+        passed.push(...groupItems);
       }
     });
 
     return { attentionFindings: attention, passedFindings: passed };
   }, [filteredFindings]);
+
+  // Unique rule count for attention findings in multi-sample view
+  const uniqueAttentionRuleCount = useMemo(() => {
+    return new Set(attentionFindings.map((f) => f.ruleId || f.ruleReference)).size;
+  }, [attentionFindings]);
 
   // Render an individual Finding Card with 1-Click Verification Toolbar
   const renderFindingCard = (finding: ComplianceFindingData) => {
@@ -800,24 +948,26 @@ export const ComplianceFindings: React.FC = () => {
                     variant="outline"
                     size="sm"
                     disabled={isFindingProcessing}
-                    className="bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700 text-xs"
+                    className={`text-xs font-semibold ${
+                      finding.status === FindingStatus.VERIFIED_NON_COMPLIANT
+                        ? 'bg-slate-800 border-slate-700 text-emerald-300 hover:bg-emerald-950 hover:border-emerald-700 hover:text-emerald-200'
+                        : 'bg-slate-800 border-slate-700 text-rose-300 hover:bg-rose-950 hover:border-rose-700 hover:text-rose-200'
+                    }`}
                     onClick={() =>
                       handleDirectVerify(
                         finding,
-                        finding.inspectorVerification.decision ===
-                          InspectorVerificationDecision.VERIFIED_COMPLIANT
-                          ? InspectorVerificationDecision.VERIFIED_NON_COMPLIANT
-                          : InspectorVerificationDecision.VERIFIED_COMPLIANT
+                        finding.status === FindingStatus.VERIFIED_NON_COMPLIANT
+                          ? InspectorVerificationDecision.VERIFIED_COMPLIANT
+                          : InspectorVerificationDecision.VERIFIED_NON_COMPLIANT
                       )
                     }
                   >
                     {isFindingProcessing ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : finding.inspectorVerification.decision ===
-                      InspectorVerificationDecision.VERIFIED_COMPLIANT ? (
-                      'Change to Violation'
-                    ) : (
+                    ) : finding.status === FindingStatus.VERIFIED_NON_COMPLIANT ? (
                       'Change to Compliant'
+                    ) : (
+                      'Change to Violation'
                     )}
                   </Button>
                   <Button
@@ -929,6 +1079,389 @@ export const ComplianceFindings: React.FC = () => {
     );
   };
 
+  // Render a Grouped Action Card for "All Samples" View
+  const renderGroupedFindingCard = (group: ComplianceFindingData[]) => {
+    const primary = group[0];
+    const isRuleProcessing = verifyingRuleId === primary.ruleId;
+    const isGroupVerified = group.every((f) => f.isVerified);
+    const hasViolation = group.some(
+      (f) =>
+        f.candidateStatus === FindingCandidateStatus.POTENTIAL_NON_COMPLIANCE ||
+        f.status === FindingStatus.VERIFIED_NON_COMPLIANT
+    );
+    const sampleCodes = group.map((f) => f.sampleCode);
+    const isAllSamplesAffected = samples.length > 0 && group.length >= samples.length;
+
+    const defectiveFindings = group.filter(
+      (f) =>
+        f.candidateStatus === FindingCandidateStatus.POTENTIAL_NON_COMPLIANCE ||
+        f.status === FindingStatus.VERIFIED_NON_COMPLIANT ||
+        f.aiObservation.state === 'NOT_DETECTED'
+    );
+    const defectiveCount = defectiveFindings.length;
+    const isAllVerifiedCompliant =
+      isGroupVerified && group.every((f) => f.status === FindingStatus.VERIFIED_COMPLIANT);
+    const hasVerifiedViolation =
+      group.some((f) => f.status === FindingStatus.VERIFIED_NON_COMPLIANT);
+
+    return (
+      <Card
+        key={primary.ruleId}
+        className={`border transition-all duration-150 ${
+          isGroupVerified
+            ? hasVerifiedViolation
+              ? 'border-rose-300 bg-rose-50/10 shadow-xs ring-1 ring-rose-200/40'
+              : 'border-slate-200 bg-white shadow-2xs'
+            : hasViolation
+            ? 'border-rose-300 bg-rose-50/20 shadow-xs ring-1 ring-rose-200/50'
+            : 'border-amber-300 bg-amber-50/20 shadow-xs ring-1 ring-amber-200/50'
+        }`}
+      >
+        <CardContent className="p-4 sm:p-5 space-y-4">
+          {/* Header Row */}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-bold text-slate-900">
+                  {formatRuleTitle(primary)}
+                </h3>
+                <span className="font-bold text-xs text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                  {primary.ruleReference}
+                </span>
+
+                {/* Affected Scope Badge */}
+                {defectiveCount > 0 && !isGroupVerified ? (
+                  <span className="text-[11px] font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 text-rose-600" />
+                    {defectiveCount} of {samples.length} Specimens Defective ({defectiveFindings.map((s) => s.sampleCode.split('-').pop()).join(', ')})
+                  </span>
+                ) : isAllSamplesAffected ? (
+                  <span className="text-[11px] font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 flex items-center gap-1">
+                    <Layers className="w-3 h-3 text-blue-600" />
+                    All {samples.length} Specimens ({sampleCodes.map((s) => s.split('-').pop()).join(', ')})
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 text-amber-600" />
+                    {group.length} of {samples.length} Specimens ({sampleCodes.map((s) => s.split('-').pop()).join(', ')})
+                  </span>
+                )}
+
+                <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                  {primary.ruleFamily.replace(/_/g, ' ')}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium">
+                {primary.requirementDescription}
+              </p>
+            </div>
+
+            {/* Badges */}
+            <div className="flex flex-wrap items-center gap-2">
+              {isGroupVerified ? (
+                hasVerifiedViolation ? (
+                  <Badge variant="danger" size="sm" icon={<XCircle className="w-3 h-3" />}>
+                    Verified Violation ({group.filter((f) => f.status === FindingStatus.VERIFIED_NON_COMPLIANT).length}/{group.length})
+                  </Badge>
+                ) : (
+                  <Badge variant="success" size="sm" icon={<ShieldCheck className="w-3 h-3" />}>
+                    Verified Compliant ({group.filter((f) => f.isVerified).length}/{group.length})
+                  </Badge>
+                )
+              ) : hasViolation ? (
+                <Badge variant="danger" size="sm" icon={<XCircle className="w-3 h-3" />}>
+                  Potential Non-Compliance ({defectiveCount > 0 ? `${defectiveCount} of ${group.length} Defective` : 'Batch'})
+                </Badge>
+              ) : (
+                <Badge variant="warning" size="sm" icon={<AlertTriangle className="w-3 h-3" />}>
+                  Requires Review
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          {/* Statutory Legal Requirement Strip */}
+          <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center space-x-2">
+              <FileText className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+              <span><strong>Statutory Criteria:</strong> {primary.requirementDescription}</span>
+            </div>
+            <div className="flex items-center space-x-2 text-[11px] text-slate-500 font-mono flex-shrink-0">
+              {primary.ruleEngineResult?.reason && (
+                <span>Reason: {primary.ruleEngineResult.reason}</span>
+              )}
+              <span>•</span>
+              <span>DB v{primary.ruleEngineResult?.ruleDatabaseVersion || '1.0'}</span>
+            </div>
+          </div>
+
+          {/* Multi-Specimen Observation Comparison Grid */}
+          <div className="space-y-2">
+            <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center justify-between">
+              <span>Specimen Package Observations ({group.length} Units)</span>
+              <span className="text-[10px] font-normal text-slate-400">
+                Side-by-side comparison across sampled units
+              </span>
+            </div>
+
+            <div className={`grid grid-cols-1 ${group.length > 2 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-3`}>
+              {group.map((f) => {
+                const obsValue = f.inspectorVerification.verifiedValue || f.aiObservation.extractedValue;
+                const conf = f.aiObservation.confidence;
+                const hasImages = f.aiObservation.evidenceImageIds && f.aiObservation.evidenceImageIds.length > 0;
+
+                return (
+                  <div
+                    key={f._id}
+                    className={`p-3 rounded-xl border space-y-2 ${
+                      f.isVerified
+                        ? 'bg-emerald-50/30 border-emerald-200'
+                        : f.candidateStatus === FindingCandidateStatus.POTENTIAL_NON_COMPLIANCE
+                        ? 'bg-rose-50/30 border-rose-200'
+                        : 'bg-white border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                        Unit: {f.sampleCode}
+                      </span>
+                      {conf && (
+                        <span
+                          className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                            conf === 'HIGH'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : conf === 'MEDIUM'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          Conf: {conf}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Observed Value */}
+                    <div>
+                      <div className="text-[10px] text-slate-500 mb-0.5">Observed Value:</div>
+                      <div className="p-2 rounded bg-slate-50 border border-slate-200 font-mono text-xs font-semibold text-slate-800 break-words min-h-[34px]">
+                        {obsValue || <span className="text-slate-400 italic">No declaration detected</span>}
+                      </div>
+                    </div>
+
+                    {/* Thumbnail */}
+                    {hasImages && currentInspection && (
+                      <div className="pt-1">
+                        <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">Evidence:</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {f.aiObservation.evidenceImageIds.map((imgId: string, idx: number) => {
+                            const imgUrl = getSampleImageUrl(currentInspection._id, f.sampleId, imgId);
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() =>
+                                  setLightboxImage({
+                                    url: imgUrl,
+                                    title: `${formatRuleTitle(primary)} (${primary.ruleReference})`,
+                                    subtitle: `Unit: ${f.sampleCode} • Observed: ${obsValue || 'None'}`,
+                                  })
+                                }
+                                className="group relative w-12 h-12 rounded-lg overflow-hidden border border-slate-200 hover:border-blue-500 transition-colors cursor-pointer"
+                              >
+                                <img
+                                  src={imgUrl}
+                                  alt="Specimen thumbnail"
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                />
+                                <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                                  <Eye className="w-3.5 h-3.5" />
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Per-specimen status footer */}
+                    <div className="pt-1 flex items-center justify-between text-[11px] border-t border-slate-100">
+                      <span className="text-slate-500">Status:</span>
+                      {f.isVerified ? (
+                        <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" />
+                          {f.status === FindingStatus.VERIFIED_COMPLIANT ? 'Compliant' : 'Violation'}
+                        </span>
+                      ) : (
+                        <span className="text-amber-700 font-medium">Pending</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Verification Toolbar / Banner */}
+          {isGroupVerified ? (
+            <div className="p-3.5 rounded-xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+              <div className="space-y-0.5">
+                <div className="flex items-center space-x-2 flex-wrap">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-bold text-slate-100">
+                    Officer Determination Recorded for All {group.length} Specimens
+                  </span>
+                  <span className="text-slate-600">&bull;</span>
+                  <span
+                    className={`text-xs font-mono font-bold ${
+                      hasVerifiedViolation ? 'text-rose-400' : 'text-emerald-400'
+                    }`}
+                  >
+                    {hasVerifiedViolation
+                      ? 'VERIFIED_NON_COMPLIANT (Statutory Violation)'
+                      : 'VERIFIED_COMPLIANT (Passed)'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Recorded across specimens {sampleCodes.map((s) => s.split('-').pop()).join(', ')}
+                </p>
+              </div>
+
+              {!isController && (
+                <div className="flex items-center space-x-2 flex-shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isRuleProcessing}
+                    className={`text-xs font-semibold ${
+                      hasVerifiedViolation
+                        ? 'bg-slate-800 border-slate-700 text-emerald-300 hover:bg-emerald-950 hover:border-emerald-700 hover:text-emerald-200'
+                        : 'bg-slate-800 border-slate-700 text-rose-300 hover:bg-rose-950 hover:border-rose-700 hover:text-rose-200'
+                    }`}
+                    onClick={() =>
+                      handleGroupDirectVerify(
+                        group,
+                        hasVerifiedViolation
+                          ? InspectorVerificationDecision.VERIFIED_COMPLIANT
+                          : InspectorVerificationDecision.VERIFIED_NON_COMPLIANT
+                      )
+                    }
+                  >
+                    {isRuleProcessing ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : hasVerifiedViolation ? (
+                      'Change All to Compliant'
+                    ) : (
+                      'Change All to Violation'
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700 text-xs"
+                    onClick={() => handleOpenCorrection(primary)}
+                    icon={<Edit3 className="w-3.5 h-3.5" />}
+                  >
+                    Edit Notes
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+              <div className="flex flex-wrap items-center gap-2">
+                {!isController && (
+                  <>
+                    {/* 1-Click Verify All Compliant */}
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={isRuleProcessing}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs"
+                      icon={
+                        isRuleProcessing ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )
+                      }
+                      onClick={() =>
+                        handleGroupDirectVerify(group, InspectorVerificationDecision.VERIFIED_COMPLIANT)
+                      }
+                    >
+                      Verify All Compliant ({group.length} Units)
+                    </Button>
+
+                    {/* 1-Click Flag All as Violation */}
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={isRuleProcessing}
+                      className="text-xs font-semibold shadow-2xs"
+                      icon={
+                        isRuleProcessing ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <XCircle className="w-3.5 h-3.5" />
+                        )
+                      }
+                      onClick={() =>
+                        handleGroupDirectVerify(group, InspectorVerificationDecision.VERIFIED_NON_COMPLIANT)
+                      }
+                    >
+                      Flag Violation for Batch ({group.length} Units)
+                    </Button>
+
+                    {/* Edit Notes */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-slate-200 text-slate-700 hover:bg-slate-50 text-xs"
+                      onClick={() => handleOpenCorrection(primary)}
+                      icon={<Edit3 className="w-3.5 h-3.5" />}
+                    >
+                      Edit Notes
+                    </Button>
+                  </>
+                )}
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Applies determination to all {group.length} specimens at once.
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
+  // Render List of Findings: Grouped if in All-Samples view with multiple samples, else individual cards
+  const renderFindingList = (items: ComplianceFindingData[]) => {
+    const isMultiSampleView = selectedSampleId === 'ALL' && samples.length > 1;
+
+    if (isMultiSampleView) {
+      const groupsMap = new Map<string, ComplianceFindingData[]>();
+      items.forEach((item) => {
+        const key = item.ruleId || item.ruleReference;
+        if (!groupsMap.has(key)) {
+          groupsMap.set(key, []);
+        }
+        groupsMap.get(key)!.push(item);
+      });
+
+      return (
+        <div className="space-y-4">
+          {Array.from(groupsMap.values()).map(renderGroupedFindingCard)}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {items.map(renderFindingCard)}
+      </div>
+    );
+  };
+
   // Render Compact 1-Line Statutory Checklist Table for Passing / Compliant Rules
   const renderChecklistTable = (
     items: ComplianceFindingData[],
@@ -939,18 +1472,85 @@ export const ComplianceFindings: React.FC = () => {
     if (items.length === 0) return null;
 
     const unverifiedCount = items.filter((f) => !f.isVerified).length;
+    const isMultiSampleView = selectedSampleId === 'ALL' && samples.length > 1;
+
+    // Group passing items by statutory rule when viewing all samples to eliminate repetitive duplicate rows
+    const groupedItems = isMultiSampleView
+      ? (() => {
+          const map = new Map<
+            string,
+            {
+              key: string;
+              primaryFinding: ComplianceFindingData;
+              allFindings: ComplianceFindingData[];
+              sampleCodes: string[];
+              uniqueObservedValues: string[];
+              isAllVerified: boolean;
+              allEvidenceIds: string[];
+            }
+          >();
+
+          for (const finding of items) {
+            const groupKey = finding.ruleId || finding.ruleReference;
+            const existing = map.get(groupKey);
+            const val = (
+              finding.inspectorVerification.verifiedValue ||
+              finding.aiObservation.extractedValue ||
+              ''
+            ).trim();
+            const evidence = finding.aiObservation.evidenceImageIds || [];
+
+            if (existing) {
+              existing.allFindings.push(finding);
+              if (!existing.sampleCodes.includes(finding.sampleCode)) {
+                existing.sampleCodes.push(finding.sampleCode);
+              }
+              if (val && !existing.uniqueObservedValues.includes(val)) {
+                existing.uniqueObservedValues.push(val);
+              }
+              if (!finding.isVerified) {
+                existing.isAllVerified = false;
+              }
+              for (const ev of evidence) {
+                if (!existing.allEvidenceIds.includes(ev)) {
+                  existing.allEvidenceIds.push(ev);
+                }
+              }
+            } else {
+              map.set(groupKey, {
+                key: groupKey,
+                primaryFinding: finding,
+                allFindings: [finding],
+                sampleCodes: [finding.sampleCode],
+                uniqueObservedValues: val ? [val] : [],
+                isAllVerified: finding.isVerified,
+                allEvidenceIds: [...evidence],
+              });
+            }
+          }
+
+          return Array.from(map.values());
+        })()
+      : [];
+
+    const totalDisplayCount = isMultiSampleView ? groupedItems.length : items.length;
 
     return (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
         {/* Table Header Strip */}
         <div className="p-4 sm:px-5 sm:py-3.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-0.5">
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 flex-wrap gap-y-1">
               <CheckSquare className="w-4 h-4 text-emerald-600" />
               <h4 className="text-sm font-bold text-slate-900">{title}</h4>
               <span className="text-xs font-semibold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full">
-                {items.length} Rules
+                {totalDisplayCount} {isMultiSampleView ? 'Statutory Rules Satisfied' : 'Rules'}
               </span>
+              {isMultiSampleView && (
+                <span className="text-[11px] font-medium text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-md border border-slate-300">
+                  Consolidated across all {samples.length} specimens
+                </span>
+              )}
             </div>
             {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
           </div>
@@ -991,159 +1591,356 @@ export const ComplianceFindings: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700 bg-white">
-              {items.map((finding) => {
-                const isProcessing = verifyingFindingId === finding._id;
-                const hasEvidence =
-                  finding.aiObservation.evidenceImageIds &&
-                  finding.aiObservation.evidenceImageIds.length > 0;
+              {isMultiSampleView
+                ? groupedItems.map((group) => {
+                    const primary = group.primaryFinding;
+                    const isProcessing = group.allFindings.some(
+                      (f) => verifyingFindingId === f._id
+                    );
+                    const hasEvidence = group.allEvidenceIds.length > 0;
 
-                return (
-                  <tr
-                    key={finding._id}
-                    className="hover:bg-slate-50/80 transition-colors"
-                  >
-                    {/* Plain English Parameter Name & Citation */}
-                    <td className="py-3 px-4">
-                      <div className="space-y-0.5">
-                        <div className="font-bold text-slate-900 text-xs">
-                          {formatRuleTitle(finding)}
-                        </div>
-                        <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                          <span className="font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                            {finding.ruleReference}
-                          </span>
-                          <span className="text-slate-300">&bull;</span>
-                          <span className="truncate max-w-xs" title={finding.requirementDescription}>
-                            {finding.requirementDescription}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Observed Value on Package */}
-                    <td className="py-3 px-4">
-                      {finding.inspectorVerification.verifiedValue ||
-                      finding.aiObservation.extractedValue ? (
-                        <span
-                          className="font-mono text-xs font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-block max-w-xs truncate"
-                          title={
-                            finding.inspectorVerification.verifiedValue ||
-                            finding.aiObservation.extractedValue ||
-                            ''
-                          }
-                        >
-                          {finding.inspectorVerification.verifiedValue ||
-                            finding.aiObservation.extractedValue}
-                        </span>
-                      ) : (
-                        <span className="text-emerald-700 font-medium italic text-[11px]">
-                          Compliant standard format
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Sample Unit */}
-                    <td className="py-3 px-3 text-center font-mono text-[11px] text-slate-500">
-                      {finding.sampleCode}
-                    </td>
-
-                    {/* Evaluation Status Badge */}
-                    <td className="py-3 px-3">
-                      <Badge
-                        variant={finding.isVerified ? 'success' : 'info'}
-                        size="sm"
-                        icon={
-                          finding.isVerified ? (
-                            <ShieldCheck className="w-3 h-3" />
-                          ) : undefined
-                        }
+                    return (
+                      <tr
+                        key={group.key}
+                        className="hover:bg-slate-50/80 transition-colors"
                       >
-                        {finding.isVerified
-                          ? 'Verified Compliant'
-                          : 'Compliant Candidate'}
-                      </Badge>
-                    </td>
+                        {/* Plain English Parameter Name & Citation */}
+                        <td className="py-3 px-4">
+                          <div className="space-y-0.5">
+                            <div className="font-bold text-slate-900 text-xs">
+                              {formatRuleTitle(primary)}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                              <span className="font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                {primary.ruleReference}
+                              </span>
+                              <span className="text-slate-300">&bull;</span>
+                              <span
+                                className="truncate max-w-xs"
+                                title={primary.requirementDescription}
+                              >
+                                {primary.requirementDescription}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
 
-                    {/* Photo Evidence Preview */}
-                    <td className="py-3 px-3 text-center">
-                      {hasEvidence && currentInspection ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const imgId = finding.aiObservation.evidenceImageIds[0];
-                            const url = getSampleImageUrl(
-                              currentInspection._id,
-                              finding.sampleId,
-                              imgId
-                            );
-                            setLightboxImage({
-                              url,
-                              title: `${formatRuleTitle(finding)} (${finding.ruleReference})`,
-                              subtitle: `Observed: ${
-                                finding.aiObservation.extractedValue || 'Compliant'
-                              } • Unit: ${finding.sampleCode}`,
-                            });
-                          }}
-                          title="View Attached Evidence Photo"
-                          className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded cursor-pointer transition-colors inline-flex items-center gap-1"
-                        >
-                          <ImageIcon className="w-3.5 h-3.5" />
-                          <span className="text-[10px] font-semibold">
-                            {finding.aiObservation.evidenceImageIds.length}
+                        {/* Observed Value on Package */}
+                        <td className="py-3 px-4">
+                          {group.uniqueObservedValues.length > 0 ? (
+                            <span
+                              className="font-mono text-xs font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-block max-w-xs truncate"
+                              title={group.uniqueObservedValues.join(' | ')}
+                            >
+                              {group.uniqueObservedValues.join(' | ')}
+                            </span>
+                          ) : (
+                            <span className="text-emerald-700 font-medium italic text-[11px]">
+                              Compliant standard format
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Sample Unit Coverage */}
+                        <td className="py-3 px-3 text-center">
+                          <span
+                            className="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-[11px] inline-block"
+                            title={`Applicable to: ${group.sampleCodes.join(', ')}`}
+                          >
+                            All {group.sampleCodes.length} Specimens
                           </span>
-                        </button>
-                      ) : (
-                        <span className="text-slate-300">&mdash;</span>
-                      )}
-                    </td>
+                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                            {group.sampleCodes
+                              .map((c) => c.split('-').pop())
+                              .join(', ')}
+                          </div>
+                        </td>
 
-                    {/* Quick 1-Click Action & Edit */}
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end space-x-1.5">
-                        {!finding.isVerified && !isController && (
-                          <Button
-                            variant="outline"
+                        {/* Evaluation Status Badge */}
+                        <td className="py-3 px-3">
+                          <Badge
+                            variant={group.isAllVerified ? 'success' : 'info'}
                             size="sm"
-                            disabled={isProcessing}
-                            onClick={() =>
-                              handleDirectVerify(
-                                finding,
-                                InspectorVerificationDecision.VERIFIED_COMPLIANT
-                              )
-                            }
-                            className="text-[11px] py-1 px-2.5 bg-white border-emerald-300 text-emerald-800 hover:bg-emerald-600 hover:text-white transition-colors shadow-2xs font-semibold"
                             icon={
-                              isProcessing ? (
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                              ) : (
-                                <Check className="w-3 h-3 text-emerald-600" />
-                              )
+                              group.isAllVerified ? (
+                                <ShieldCheck className="w-3 h-3" />
+                              ) : undefined
                             }
                           >
-                            {isProcessing ? 'Saving...' : 'Verify'}
-                          </Button>
-                        )}
-                        {finding.isVerified && (
-                          <span className="inline-flex items-center text-emerald-700 text-[11px] font-semibold mr-1">
-                            <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                            Recorded
-                          </span>
-                        )}
-                        {!isController && (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenCorrection(finding)}
-                            title="Edit observed value or notes"
-                            className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded cursor-pointer transition-colors"
+                            {group.isAllVerified
+                              ? 'Verified Compliant'
+                              : 'Compliant Candidate'}
+                          </Badge>
+                        </td>
+
+                        {/* Photo Evidence Preview */}
+                        <td className="py-3 px-3 text-center">
+                          {hasEvidence && currentInspection ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const imgId = group.allEvidenceIds[0];
+                                const url = getSampleImageUrl(
+                                  currentInspection._id,
+                                  primary.sampleId,
+                                  imgId
+                                );
+                                setLightboxImage({
+                                  url,
+                                  title: `${formatRuleTitle(primary)} (${primary.ruleReference})`,
+                                  subtitle: `Observed: ${
+                                    group.uniqueObservedValues.join(' | ') || 'Compliant'
+                                  } • All ${group.sampleCodes.length} Specimens`,
+                                });
+                              }}
+                              title="View Attached Evidence Photo"
+                              className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded cursor-pointer transition-colors inline-flex items-center gap-1"
+                            >
+                              <ImageIcon className="w-3.5 h-3.5" />
+                              <span className="text-[10px] font-semibold">
+                                {group.allEvidenceIds.length}
+                              </span>
+                            </button>
+                          ) : (
+                            <span className="text-slate-300">&mdash;</span>
+                          )}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end space-x-1.5">
+                            {!group.isAllVerified && !isController ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={isProcessing}
+                                onClick={() => handleVerifyBatch(group.allFindings)}
+                                className="text-[11px] py-1 px-2.5 bg-white border-emerald-300 text-emerald-800 hover:bg-emerald-600 hover:text-white transition-colors shadow-2xs font-semibold"
+                                icon={
+                                  isProcessing ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Check className="w-3 h-3 text-emerald-600" />
+                                  )
+                                }
+                              >
+                                {isProcessing ? 'Saving...' : 'Verify All'}
+                              </Button>
+                            ) : (
+                              <span className="inline-flex items-center text-emerald-700 text-[11px] font-semibold mr-1">
+                                <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                                Auto-Recorded
+                              </span>
+                            )}
+                            {!isController && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={isProcessing}
+                                  onClick={() =>
+                                    handleGroupDirectVerify(
+                                      group.allFindings,
+                                      InspectorVerificationDecision.VERIFIED_NON_COMPLIANT
+                                    )
+                                  }
+                                  className="text-[10px] py-1 px-2 text-rose-600 border-rose-200 hover:bg-rose-50 hover:border-rose-300 font-semibold transition-colors"
+                                  icon={<XCircle className="w-3 h-3 text-rose-500" />}
+                                  title="Flag rule as violation across all specimens"
+                                >
+                                  Flag Violation
+                                </Button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCorrection(primary)}
+                                  title="Edit observed value or notes"
+                                  className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded cursor-pointer transition-colors"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                : items.map((finding) => {
+                    const isProcessing = verifyingFindingId === finding._id;
+                    const hasEvidence =
+                      finding.aiObservation.evidenceImageIds &&
+                      finding.aiObservation.evidenceImageIds.length > 0;
+
+                    return (
+                      <tr
+                        key={finding._id}
+                        className="hover:bg-slate-50/80 transition-colors"
+                      >
+                        {/* Plain English Parameter Name & Citation */}
+                        <td className="py-3 px-4">
+                          <div className="space-y-0.5">
+                            <div className="font-bold text-slate-900 text-xs">
+                              {formatRuleTitle(finding)}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                              <span className="font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                {finding.ruleReference}
+                              </span>
+                              <span className="text-slate-300">&bull;</span>
+                              <span
+                                className="truncate max-w-xs"
+                                title={finding.requirementDescription}
+                              >
+                                {finding.requirementDescription}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Observed Value on Package */}
+                        <td className="py-3 px-4">
+                          {finding.inspectorVerification.verifiedValue ||
+                          finding.aiObservation.extractedValue ? (
+                            <span
+                              className="font-mono text-xs font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-block max-w-xs truncate"
+                              title={
+                                finding.inspectorVerification.verifiedValue ||
+                                finding.aiObservation.extractedValue ||
+                                ''
+                              }
+                            >
+                              {finding.inspectorVerification.verifiedValue ||
+                                finding.aiObservation.extractedValue}
+                            </span>
+                          ) : (
+                            <span className="text-emerald-700 font-medium italic text-[11px]">
+                              Compliant standard format
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Sample Unit */}
+                        <td className="py-3 px-3 text-center font-mono text-[11px] text-slate-500">
+                          {finding.sampleCode}
+                        </td>
+
+                        {/* Evaluation Status Badge */}
+                        <td className="py-3 px-3">
+                          <Badge
+                            variant={finding.isVerified ? 'success' : 'info'}
+                            size="sm"
+                            icon={
+                              finding.isVerified ? (
+                                <ShieldCheck className="w-3 h-3" />
+                              ) : undefined
+                            }
                           >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                            {finding.isVerified
+                              ? 'Verified Compliant'
+                              : 'Compliant Candidate'}
+                          </Badge>
+                        </td>
+
+                        {/* Photo Evidence Preview */}
+                        <td className="py-3 px-3 text-center">
+                          {hasEvidence && currentInspection ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const imgId =
+                                  finding.aiObservation.evidenceImageIds[0];
+                                const url = getSampleImageUrl(
+                                  currentInspection._id,
+                                  finding.sampleId,
+                                  imgId
+                                );
+                                setLightboxImage({
+                                  url,
+                                  title: `${formatRuleTitle(finding)} (${finding.ruleReference})`,
+                                  subtitle: `Observed: ${
+                                    finding.aiObservation.extractedValue ||
+                                    'Compliant'
+                                  } • Unit: ${finding.sampleCode}`,
+                                });
+                              }}
+                              title="View Attached Evidence Photo"
+                              className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded cursor-pointer transition-colors inline-flex items-center gap-1"
+                            >
+                              <ImageIcon className="w-3.5 h-3.5" />
+                              <span className="text-[10px] font-semibold">
+                                {finding.aiObservation.evidenceImageIds.length}
+                              </span>
+                            </button>
+                          ) : (
+                            <span className="text-slate-300">&mdash;</span>
+                          )}
+                        </td>
+
+                        {/* Quick 1-Click Action & Edit */}
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end space-x-1.5">
+                            {!finding.isVerified && !isController && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={isProcessing}
+                                onClick={() =>
+                                  handleDirectVerify(
+                                    finding,
+                                    InspectorVerificationDecision.VERIFIED_COMPLIANT
+                                  )
+                                }
+                                className="text-[11px] py-1 px-2.5 bg-white border-emerald-300 text-emerald-800 hover:bg-emerald-600 hover:text-white transition-colors shadow-2xs font-semibold"
+                                icon={
+                                  isProcessing ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Check className="w-3 h-3 text-emerald-600" />
+                                  )
+                                }
+                              >
+                                {isProcessing ? 'Saving...' : 'Verify'}
+                              </Button>
+                            )}
+                            {finding.isVerified && (
+                              <span className="inline-flex items-center text-emerald-700 text-[11px] font-semibold mr-1">
+                                <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                                Auto-Recorded
+                              </span>
+                            )}
+                            {!isController && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={isProcessing}
+                                  onClick={() =>
+                                    handleDirectVerify(
+                                      finding,
+                                      InspectorVerificationDecision.VERIFIED_NON_COMPLIANT
+                                    )
+                                  }
+                                  className="text-[10px] py-1 px-2 text-rose-600 border-rose-200 hover:bg-rose-50 hover:border-rose-300 font-semibold transition-colors"
+                                  icon={<XCircle className="w-3 h-3 text-rose-500" />}
+                                  title="Flag finding as non-compliant violation"
+                                >
+                                  Flag Violation
+                                </Button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCorrection(finding)}
+                                  title="Edit observed value or notes"
+                                  className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded cursor-pointer transition-colors"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
             </tbody>
           </table>
         </div>
@@ -1559,17 +2356,20 @@ export const ComplianceFindings: React.FC = () => {
                       <div className="flex items-center space-x-2">
                         <AlertTriangle className="w-4 h-4 text-amber-600" />
                         <h3 className="text-sm font-bold text-slate-900">
-                          Action Required: Discrepancies & Potential Non-Compliances ({attentionFindings.length})
+                          Action Required: Discrepancies & Potential Non-Compliances{' '}
+                          {selectedSampleId === 'ALL' && samples.length > 1
+                            ? `(${uniqueAttentionRuleCount} Rules across ${attentionFindings.length} Specimens)`
+                            : `(${attentionFindings.length})`}
                         </h3>
                       </div>
                       <span className="text-xs text-slate-500 font-medium">
-                        {attentionFindings.filter((f) => f.isVerified).length} of {attentionFindings.length} verified
+                        {selectedSampleId === 'ALL' && samples.length > 1
+                          ? `${attentionFindings.filter((f) => f.isVerified).length} of ${attentionFindings.length} unit checks verified`
+                          : `${attentionFindings.filter((f) => f.isVerified).length} of ${attentionFindings.length} verified`}
                       </span>
                     </div>
 
-                    <div className="space-y-4">
-                      {attentionFindings.map(renderFindingCard)}
-                    </div>
+                    {renderFindingList(attentionFindings)}
                   </div>
 
                   {/* 2. Compact Statutory Checklist Table for Passing Rules */}
@@ -1609,12 +2409,13 @@ export const ComplianceFindings: React.FC = () => {
                           <div className="flex items-center space-x-2">
                             <ShieldAlert className="w-4 h-4 text-rose-600" />
                             <h3 className="text-sm font-bold text-slate-900">
-                              Verified Non-Compliances ({verifiedViolations.length})
+                              Verified Non-Compliances{' '}
+                              {selectedSampleId === 'ALL' && samples.length > 1
+                                ? `(${new Set(verifiedViolations.map((f) => f.ruleId)).size} Rules across ${verifiedViolations.length} Specimens)`
+                                : `(${verifiedViolations.length})`}
                             </h3>
                           </div>
-                          <div className="space-y-4">
-                            {verifiedViolations.map(renderFindingCard)}
-                          </div>
+                          {renderFindingList(verifiedViolations)}
                         </div>
                       )}
                       {verifiedPassed.length > 0 &&
@@ -1633,11 +2434,12 @@ export const ComplianceFindings: React.FC = () => {
                 {attentionFindings.length > 0 && (
                   <div className="space-y-3">
                     <h3 className="text-sm font-bold text-slate-900">
-                      Discrepancies Matching Search ({attentionFindings.length})
+                      Discrepancies Matching Search{' '}
+                      {selectedSampleId === 'ALL' && samples.length > 1
+                        ? `(${uniqueAttentionRuleCount} Rules across ${attentionFindings.length} Specimens)`
+                        : `(${attentionFindings.length})`}
                     </h3>
-                    <div className="space-y-4">
-                      {attentionFindings.map(renderFindingCard)}
-                    </div>
+                    {renderFindingList(attentionFindings)}
                   </div>
                 )}
                 {passedFindings.length > 0 &&
@@ -1649,9 +2451,7 @@ export const ComplianceFindings: React.FC = () => {
               </div>
             ) : (
               /* Potential Non-Compliance or Requires Review Tabs */
-              <div className="space-y-4">
-                {filteredFindings.map(renderFindingCard)}
-              </div>
+              renderFindingList(filteredFindings)
             )}
           </div>
       )}
@@ -1731,6 +2531,22 @@ export const ComplianceFindings: React.FC = () => {
                   className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 text-slate-900 focus:outline-hidden focus:border-blue-500"
                 />
               </div>
+
+              {/* Apply to all specimens checkbox when in All-Samples view */}
+              {selectedSampleId === 'ALL' && samples.length > 1 && (
+                <div className="pt-2 border-t border-slate-100 flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="applyToAll"
+                    checked={applyCorrectionToGroup}
+                    onChange={(e) => setApplyCorrectionToGroup(e.target.checked)}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <label htmlFor="applyToAll" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                    Apply this correction & notes to all {samples.length} specimens for this rule
+                  </label>
+                </div>
+              )}
             </div>
 
             {/* Footer */}

@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { Sample } from '../models';
 import { SampleService } from '../services/sample.service';
 
 export class SampleController {
@@ -423,7 +424,7 @@ export class SampleController {
         return;
       }
 
-      const inspectionId = Array.isArray(req.params.inspectionId)
+      let inspectionId = Array.isArray(req.params.inspectionId)
         ? req.params.inspectionId[0]
         : req.params.inspectionId;
       const sampleId = Array.isArray(req.params.sampleId)
@@ -433,13 +434,28 @@ export class SampleController {
         ? req.params.imageId[0]
         : req.params.imageId;
 
-      if (!inspectionId || !sampleId || !imageId) {
+      if (!sampleId || !imageId) {
         res.status(400).json({
           success: false,
           error: 'Bad Request',
-          message: 'Inspection ID, Sample ID, and Image ID parameters are required.',
+          message: 'Sample ID and Image ID parameters are required.',
         });
         return;
+      }
+
+      // If inspectionId is not present in route params (direct sample image route), resolve from sample record
+      if (!inspectionId) {
+        const sampleRecord = await Sample.findById(sampleId).select('inspectionId').lean();
+        if (sampleRecord && sampleRecord.inspectionId) {
+          inspectionId = sampleRecord.inspectionId.toString();
+        } else {
+          res.status(404).json({
+            success: false,
+            error: 'Not Found',
+            message: `Sample '${sampleId}' not found.`,
+          });
+          return;
+        }
       }
 
       const fileInfo = await SampleService.getSampleImageFile(

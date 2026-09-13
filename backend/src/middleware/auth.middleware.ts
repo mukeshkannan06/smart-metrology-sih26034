@@ -52,7 +52,7 @@ export const requireAuth = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // 1. Extract token from HTTP-only cookie or Bearer Authorization header
+    // 1. Extract token from HTTP-only cookie, Bearer Authorization header, or URL query param (media streams)
     let token = req.cookies?.token;
 
     if (!token && req.headers.authorization) {
@@ -60,6 +60,10 @@ export const requireAuth = async (
       if (authHeader.startsWith('Bearer ')) {
         token = authHeader.substring(7).trim();
       }
+    }
+
+    if (!token && typeof req.query?.token === 'string') {
+      token = req.query.token.trim();
     }
 
     if (!token) {

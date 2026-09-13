@@ -212,7 +212,13 @@ export class ReportService {
           extractionId: sampleExtraction.extractionId || `EXT-${sample.sampleCode}`,
           aiModel: sampleExtraction.aiModel || 'Gemini 2.5 Flash',
           promptVersion: sampleExtraction.promptVersion,
-          overallConfidence: Number(sampleExtraction.overallConfidence || 0),
+          overallConfidence: typeof sampleExtraction.overallConfidence === 'number'
+            ? sampleExtraction.overallConfidence
+            : sampleExtraction.overallConfidence === 'HIGH'
+            ? 0.95
+            : sampleExtraction.overallConfidence === 'MEDIUM'
+            ? 0.75
+            : 0.5,
           warnings: sampleExtraction.warnings || [],
           declarations: (sampleExtraction.declarations || []).map((d: any) => ({
             category: d.category,
@@ -354,7 +360,7 @@ export class ReportService {
       },
       samples: processedSamples,
       legalDisclaimer:
-        'This consolidated report records observations, deterministic rule evaluations, and authorized human Inspector verifications within the Smart Metrology assistive system (SIH26034). AI extractions are assistive observations and do not constitute independent statutory authority. Final inspection determinations remain strictly governed by the verified findings of the authorized Inspector under the Legal Metrology Act, 2009 and Legal Metrology (Packaged Commodities) Rules, 2011.',
+        'This consolidated report records observations, deterministic rule evaluations, and authorized human Inspector verifications within the Smart Metrology assistive system (SIH26034). AI extractions are assistive observations and do not constitute independent statutory authority. Final inspection determinations remain strictly governed by the verified findings of the authorized Inspector under The Legal Metrology (Packaged Commodities) Rules, 2011.',
       systemIdentity: {
         appName: 'Smart Metrology',
         problemStatement: 'SIH26034',

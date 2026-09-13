@@ -223,4 +223,68 @@ export class InspectionController {
       });
     }
   }
+
+  /**
+   * PATCH /api/inspections/:id/finalize
+   * Formally finalizes and seals an inspection case by the authenticated owner Inspector.
+   */
+  static async finalizeInspection(req: Request, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({
+          success: false,
+          error: 'Unauthorized',
+          message: 'Authentication required to finalize an inspection.',
+        });
+        return;
+      }
+
+      if (req.user.role !== UserRole.INSPECTOR) {
+        res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          message: 'Only Inspectors can formally finalize and attest inspection cases.',
+        });
+        return;
+      }
+
+      const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      if (!id || typeof id !== 'string') {
+        res.status(400).json({
+          success: false,
+          error: 'Bad Request',
+          message: 'Inspection ID is required.',
+        });
+        return;
+      }
+
+      const { remarks } = req.body || {};
+
+      const { inspection, auditEventId } = await InspectionService.finalizeInspection(
+        id,
+        {
+          id: req.user.id,
+          inspectorId: req.user.inspectorId,
+          role: req.user.role,
+          name: req.user.name,
+        },
+        typeof remarks === 'string' ? remarks : undefined
+      );
+
+      res.status(200).json({
+        success: true,
+        message: `Inspection ${inspection.inspectionNumber} finalized successfully and sealed with status COMPLETED.`,
+        data: inspection,
+        auditEventId,
+      });
+    } catch (error: any) {
+      console.error('[INSPECTION_CONTROLLER] Error finalizing inspection:', error);
+      const statusCode = error.statusCode || (error.name === 'ValidationError' ? 400 : 500);
+      res.status(statusCode).json({
+        success: false,
+        error: statusCode === 403 ? 'Forbidden' : statusCode === 400 ? 'Validation Error' : 'Internal Server Error',
+        message: error.message || 'Failed to finalize inspection.',
+      });
+    }
+  }
 }

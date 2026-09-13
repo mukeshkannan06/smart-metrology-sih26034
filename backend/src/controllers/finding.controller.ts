@@ -135,6 +135,43 @@ export class FindingController {
   }
 
   /**
+   * GET /api/findings/violations
+   * Retrieves all non-compliant findings, potential violations, and discrepancies
+   * for the authenticated user (inspector sees own cases; controller sees all).
+   */
+  static async getViolations(req: Request, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({
+          success: false,
+          error: 'Unauthorized',
+          message: 'Authentication required.',
+        });
+        return;
+      }
+
+      const violations = await FindingService.getViolations({
+        id: req.user.id,
+        inspectorId: req.user.inspectorId,
+        role: req.user.role,
+        name: req.user.name,
+      });
+
+      res.status(200).json({
+        success: true,
+        data: violations,
+      });
+    } catch (error: any) {
+      console.error('[FINDING_CONTROLLER] Error fetching violations:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal Server Error',
+        message: 'Failed to retrieve violations.',
+      });
+    }
+  }
+
+  /**
    * GET /api/findings/:findingId
    * Retrieves a single finding by ID.
    */

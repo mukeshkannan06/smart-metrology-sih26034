@@ -111,6 +111,10 @@ export class FindingService {
         ruleId: item.rule_id,
       });
 
+      const isAutoCompliant =
+        candidateStatus === FindingCandidateStatus.COMPLIANT_CANDIDATE &&
+        !item.requires_inspector_review;
+
       if (!finding) {
         finding = new ComplianceFinding({
           findingId,
@@ -123,8 +127,10 @@ export class FindingService {
           declarationType: item.declaration_type,
           requirementDescription: item.requirement_description,
           candidateStatus,
-          status: candidateStatus as unknown as FindingStatus,
-          isVerified: false,
+          status: isAutoCompliant
+            ? FindingStatus.VERIFIED_COMPLIANT
+            : (candidateStatus as unknown as FindingStatus),
+          isVerified: isAutoCompliant,
           isCorrected: false,
           aiObservation: {
             state: item.observation_status,
@@ -144,15 +150,21 @@ export class FindingService {
             evaluatedAt: evaluation.evaluated_at || new Date(),
           },
           inspectorVerification: {
-            isVerified: false,
-            decision: null,
-            verifiedValue: null,
-            originalAiValuePreserved: null,
+            isVerified: isAutoCompliant,
+            decision: isAutoCompliant
+              ? InspectorVerificationDecision.VERIFIED_COMPLIANT
+              : null,
+            verifiedValue: isAutoCompliant
+              ? item.observed_value || item.normalized_value || 'Compliant'
+              : null,
+            originalAiValuePreserved: item.observed_value,
             isCorrected: false,
-            notes: null,
-            verifiedBy: null,
-            verifiedByName: null,
-            verifiedAt: null,
+            notes: isAutoCompliant
+              ? 'Statutory requirement auto-evaluated compliant under Legal Metrology Rules'
+              : null,
+            verifiedBy: isAutoCompliant ? 'SYSTEM_AUTO' : null,
+            verifiedByName: isAutoCompliant ? 'Auto-Evaluated' : null,
+            verifiedAt: isAutoCompliant ? new Date() : null,
           },
         });
       } else {
@@ -169,7 +181,7 @@ export class FindingService {
 
         finding.candidateStatus = candidateStatus;
 
-        // Only update AI observation and status if not yet verified by Inspector
+        // Auto-verify if compliant and unverified, or update AI observation
         if (!finding.isVerified) {
           finding.aiObservation = {
             state: item.observation_status,
@@ -179,7 +191,24 @@ export class FindingService {
             evidenceImageIds: item.evidence_image_ids || [],
             evidenceDescriptions: item.evidence_descriptions || [],
           };
-          finding.status = candidateStatus as unknown as FindingStatus;
+
+          if (isAutoCompliant) {
+            finding.status = FindingStatus.VERIFIED_COMPLIANT;
+            finding.isVerified = true;
+            finding.inspectorVerification = {
+              isVerified: true,
+              decision: InspectorVerificationDecision.VERIFIED_COMPLIANT,
+              verifiedValue: item.observed_value || item.normalized_value || 'Compliant',
+              originalAiValuePreserved: item.observed_value,
+              isCorrected: false,
+              notes: 'Statutory requirement auto-evaluated compliant under Legal Metrology Rules',
+              verifiedBy: 'SYSTEM_AUTO',
+              verifiedByName: 'Auto-Evaluated',
+              verifiedAt: new Date(),
+            };
+          } else {
+            finding.status = candidateStatus as unknown as FindingStatus;
+          }
         }
       }
 
@@ -634,5 +663,76 @@ export class FindingService {
     }
 
     return finding;
+  }
+
+  /**
+   * Retrieves all non-compliant findings, potential violations, and discrepancies
+   * for inspections accessible to the user (field inspector or supervisory controller).
+   */
+  static async getViolations(user: UserContext): Promise<any[]> {
+    let inspectionMatch: any = {};
+    if (user.role === UserRole.INSPECTOR) {
+      inspectionMatch = {
+        inspectorId: { $in: [user.inspectorId, user.id] },
+      };
+    }
+
+    const inspections = await Inspection.find(inspectionMatch)
+      .select('_id inspectionNumber commodity brand packageContext location inspectorId')
+      .lean();
+
+    if (!inspections || inspections.length === 0) {
+      return [];
+    }
+
+    const inspectionMap = new Map<string, any>();
+    inspections.forEach((insp) => inspectionMap.set(insp._id.toString(), insp));
+    const inspectionIds = Array.from(inspectionMap.keys());
+
+    const findings = await ComplianceFinding.find({
+      inspectionId: { $in: inspectionIds },
+      $or: [
+        { status: FindingStatus.VERIFIED_NON_COMPLIANT },
+        { candidateStatus: FindingCandidateStatus.POTENTIAL_NON_COMPLIANCE },
+        { candidateStatus: FindingCandidateStatus.REQUIRES_INSPECTOR_REVIEW },
+      ],
+    })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .lean();
+
+    return findings.map((f) => {
+      const insp = inspectionMap.get(f.inspectionId.toString());
+
+      return {
+        _id: f._id.toString(),
+        findingId: f.findingId,
+        inspectionId: f.inspectionId.toString(),
+        inspectionNumber: insp?.inspectionNumber || 'N/A',
+        commodity: insp?.commodity || 'Unknown Commodity',
+        brand: insp?.brand || null,
+        packageContext: insp?.packageContext || 'RETAIL_PACKAGE',
+        location: insp?.location || null,
+        inspectorId: insp?.inspectorId || user.inspectorId || 'N/A',
+        sampleId: f.sampleId ? f.sampleId.toString() : '',
+        sampleCode: f.sampleCode || 'S01',
+        ruleId: f.ruleId,
+        ruleReference: f.ruleReference,
+        ruleFamily: f.ruleFamily,
+        declarationType: f.declarationType,
+        requirementDescription: f.requirementDescription,
+        candidateStatus: f.candidateStatus,
+        status: f.status,
+        isVerified: f.isVerified,
+        isCorrected: f.isCorrected,
+        aiValue: f.aiObservation?.extractedValue || null,
+        verifiedValue: f.inspectorVerification?.verifiedValue || null,
+        reason: f.ruleEngineResult?.reason || null,
+        evidenceImageIds: f.aiObservation?.evidenceImageIds || [],
+        notes: f.inspectorVerification?.notes || null,
+        verifiedByName: f.inspectorVerification?.verifiedByName || null,
+        verifiedAt: f.inspectorVerification?.verifiedAt || null,
+        createdAt: f.createdAt,
+      };
+    });
   }
 }
